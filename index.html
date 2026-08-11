@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AYU.music - Premium Music Streaming</title>
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/style.css?v=9">
+  <link rel="stylesheet" href="css/animations.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  
+  <!-- CDNs -->
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- HLS Streaming supporting m3u8 streams -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+
+  <div class="app">
+    <!-- Collapsible Sidebar (Overlay Hover Strategy) -->
+    <aside class="sidebar">
+      <nav>
+        <a href="#/" class="sidebar-link active" data-page="home">
+          <i data-lucide="home"></i>
+          <span class="sidebar-text">Home</span>
+        </a>
+        <a href="#/search" class="sidebar-link" data-page="search">
+          <i data-lucide="search"></i>
+          <span class="sidebar-text">Search</span>
+        </a>
+        <a href="#/library" class="sidebar-link" data-page="library">
+          <i data-lucide="library"></i>
+          <span class="sidebar-text">Library</span>
+        </a>
+        <a href="#/socials" class="sidebar-link" data-page="socials">
+          <i data-lucide="users"></i>
+          <span class="sidebar-text">Socials</span>
+        </a>
+        <a href="#/profile" class="sidebar-link" data-page="profile">
+          <i data-lucide="user"></i>
+          <span class="sidebar-text">Profile</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content Wrapper -->
+    <div class="content">
+      <!-- Rebranded Top Header -->
+      <header class="header">
+        <a href="#/" class="brand-group">
+          <div class="brand-logo">
+            <i data-lucide="music" fill="currentColor"></i>
+          </div>
+          <span class="brand-name">AYU.music</span>
+          <button class="share-btn" aria-label="Share" id="header-share-btn">
+            <i data-lucide="share-2"></i>
+          </button>
+        </a>
+        
+        <div class="header-actions">
+          <button class="login-btn" onclick="navigateTo('#/profile')">Login</button>
+        </div>
+      </header>
+
+      <!-- Dynamic Viewport (Loads and renders sub-views via hashchange router) -->
+      <div id="main-viewport"></div>
+    </div>
+
+    <!-- Persistent Bottom Audio Controller Player -->
+    <footer class="player">
+      <!-- Left: Track info -->
+      <div class="now" id="player-track-info" style="visibility: hidden;">
+        <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=100&auto=format&fit=crop" alt="Album Art" id="player-art" />
+        <div>
+          <b id="player-title">Song Title</b>
+          <span id="player-artist">Artist Name</span>
+        </div>
+        <button id="player-like-btn" aria-label="Add to favorites">
+          <i data-lucide="heart" id="player-like-icon"></i>
+        </button>
+      </div>
+
+      <!-- Center: Playback controller and progress slider -->
+      <div class="player-center">
+        <div class="controls">
+          <button id="player-shuffle-btn" aria-label="Shuffle" onclick="alert('Shuffle toggled (visual placeholder)')">
+            <i data-lucide="shuffle"></i>
+          </button>
+          <button id="player-prev-btn" aria-label="Previous Song">
+            <i data-lucide="skip-back"></i>
+          </button>
+          <button class="main-play" id="player-play-btn" aria-label="Play/Pause">
+            <i data-lucide="play" fill="currentColor" id="player-play-icon"></i>
+          </button>
+          <button id="player-next-btn" aria-label="Next Song">
+            <i data-lucide="skip-forward"></i>
+          </button>
+          <button id="player-repeat-btn" aria-label="Repeat">
+            <i data-lucide="repeat"></i>
+          </button>
+        </div>
+
+        <div class="progress">
+          <small id="player-current-time">0:00</small>
+          <input type="range" id="player-progress-slider" min="0" value="0" step="1" aria-label="Progress Bar" />
+          <small id="player-total-time">0:00</small>
+        </div>
+      </div>
+
+      <!-- Right: Lyrics panel toggle and volume slider -->
+      <div class="player-tools">
+        <button id="player-lyrics-toggle" title="Lyrics" aria-label="Toggle Lyrics">
+          <i data-lucide="align-left"></i>
+        </button>
+        <div class="player-volume-control">
+          <i data-lucide="volume-2" style="width:16px; height:16px; color: var(--text-secondary);"></i>
+          <input type="range" id="player-volume-slider" min="0" max="100" value="80" aria-label="Volume Slider" />
+        </div>
+      </div>
+    </footer>
+
+    <!-- Slide-out Lyrics Panel -->
+    <div class="lyrics-panel" id="lyrics-panel">
+      <header>
+        <div>
+          <p>LYRICS</p>
+          <h2 id="lyrics-title">Song Title</h2>
+          <span id="lyrics-artist">Artist Name</span>
+        </div>
+        <button id="lyrics-close-btn" aria-label="Close Lyrics">&times;</button>
+      </header>
+      <div class="lyrics-body" id="lyrics-body">
+        <p class="lyrics-placeholder">Select a song and click the lyrics icon to view lyrics.</p>
+      </div>
+    </div>
+
+    <!-- Floating Global Context Menu (Three dot trigger) -->
+    <div class="context-menu" id="context-menu">
+      <!-- Generated dynamically in app.js -->
+    </div>
+
+    <!-- Full-Screen Now Playing & Scrolling Lyrics Overlay -->
+    <div class="fullscreen-player" id="fullscreen-player">
+      <!-- Blurred Background Cover -->
+      <div class="fs-bg-blur">
+        <img id="fs-bg-art" src="" alt="" />
+      </div>
+
+      <div class="fs-header">
+        <button class="fs-close-btn" id="fs-close-btn" aria-label="Close Screen">
+          <i data-lucide="chevron-down"></i>
+        </button>
+        <div class="fs-pill-switch">
+          <button class="fs-pill active">Song</button>
+          <button class="fs-pill">Video</button>
+        </div>
+        <div class="fs-header-tools">
+          <button aria-label="Maximize"><i data-lucide="maximize-2"></i></button>
+          <button class="active" aria-label="Lyrics"><i data-lucide="align-left"></i></button>
+          <button aria-label="Share"><i data-lucide="share-2"></i></button>
+        </div>
+      </div>
+
+      <div class="fs-body">
+        <!-- Left: Album cover art and timeline timeline controls -->
+        <div class="fs-left">
+          <div class="fs-art-wrapper">
+            <img id="fs-art" src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300&auto=format&fit=crop" alt="Artwork" />
+          </div>
+          <div class="fs-meta">
+            <span id="fs-artist">ARTIST NAME</span>
+            <h2 id="fs-title">Song Title</h2>
+          </div>
+          <div class="fs-progress-wrapper">
+            <input type="range" id="fs-progress-slider" min="0" value="0" step="1" aria-label="Progress Slider" />
+            <div class="fs-progress-time">
+              <small id="fs-current-time">0:00</small>
+              <small id="fs-total-time">0:00</small>
+            </div>
+          </div>
+          <div class="fs-controls">
+            <button id="fs-menu-btn" aria-label="Options"><i data-lucide="more-horizontal"></i></button>
+            <button id="fs-prev-btn" aria-label="Previous Song"><i data-lucide="skip-back"></i></button>
+            <button class="fs-play-btn" id="fs-play-btn" aria-label="Play/Pause">
+              <i data-lucide="play" fill="currentColor" id="fs-play-icon"></i>
+            </button>
+            <button id="fs-next-btn" aria-label="Next Song"><i data-lucide="skip-forward"></i></button>
+          </div>
+        </div>
+
+        <!-- Right: Synced scrolling lyric lines -->
+        <div class="fs-right">
+          <div class="fs-lyrics-container" id="fs-lyrics-body">
+            <p class="fs-lyric-line placeholder">Select a song and view scrolling lyrics.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Playlist Creation Modal -->
+    <div class="modal-overlay" id="playlist-modal-overlay">
+      <div class="modal-content">
+        <span class="modal-title">Create Playlist</span>
+        <input type="text" id="playlist-name-input" class="modal-input" placeholder="Playlist Name" autocomplete="off" />
+        <div class="modal-buttons">
+          <button class="modal-btn cancel" onclick="closeCreatePlaylistModal()">Cancel</button>
+          <button class="modal-btn action" onclick="createUserPlaylist()">Create</button>
+        </div>
+      </div>
+    </div>
+    <!-- Show More Modal Overlay -->
+    <div id="show-more-modal" class="show-more-modal">
+      <div class="show-more-modal-header">
+        <div class="show-more-header-text">
+          <span class="show-more-label">SHOW MORE</span>
+          <h1 id="show-more-modal-title" class="show-more-title">Bollywood Classics</h1>
+        </div>
+        <button class="show-more-close-btn" onclick="closeShowMoreModal()">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div id="show-more-modal-content" class="show-more-grid">
+        <!-- Will be filled dynamically -->
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- Core Javascript Components Linked Sequentially (Namespace Global Architecture) -->
+  <script src="js/data.js?v=15"></script>
+  <script src="js/api.js?v=15"></script>
+
+  <script src="js/player.js?v=15"></script>
+  <script src="js/navigation.js?v=15"></script>
+  <script src="js/home.js?v=15"></script>
+  <script src="js/search.js?v=15"></script>
+  <script src="js/library.js?v=15"></script>
+  <script src="js/socials.js?v=15"></script>
+  <script src="js/profile.js?v=15"></script>
+  <script src="js/app.js?v=15"></script>
+  <script src="js/interactions.js?v=15"></script>
+
+</body>
+</html>
