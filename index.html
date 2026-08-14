@@ -6,9 +6,9 @@
   <title>AYU.music - Premium Music Streaming</title>
    <link rel="icon" type="image/x-icon" href="music.png">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=15">
+  <link rel="stylesheet" href="css/style.css?v=18">
   <link rel="stylesheet" href="css/animations.css?v=5">
-  <link rel="stylesheet" href="css/responsive.css?v=2">
+  <link rel="stylesheet" href="css/responsive.css?v=4">
   
   <!-- CDNs -->
   <!-- Lucide Icons -->
@@ -144,7 +144,7 @@
       <!-- Generated dynamically in app.js -->
     </div>
 
-    <!-- Full-Screen Now Playing & Scrolling Lyrics Overlay -->
+    <!-- Full-Screen Now Playing & Scrolling Lyrics Overlay (YouTube Music Architecture) -->
     <div class="fullscreen-player" id="fullscreen-player">
       <!-- Blurred Background Cover -->
       <div class="fs-bg-blur">
@@ -156,26 +156,40 @@
           <i data-lucide="chevron-down"></i>
         </button>
         <div class="fs-pill-switch">
-          <button class="fs-pill active">Song</button>
-          <button class="fs-pill">Video</button>
+          <button class="fs-pill active" id="fs-pill-song">Song</button>
+          <button class="fs-pill" id="fs-pill-video">Video</button>
         </div>
         <div class="fs-header-tools">
-          <button aria-label="Maximize"><i data-lucide="maximize-2"></i></button>
-          <button class="active" aria-label="Lyrics"><i data-lucide="align-left"></i></button>
-          <button aria-label="Share"><i data-lucide="share-2"></i></button>
+          <button id="fs-cast-btn" aria-label="Cast" onclick="window.showCastDevicePicker(event)"><i data-lucide="cast"></i></button>
+          <button id="fs-more-btn" aria-label="More" onclick="window.showTrackMenu(event, window.player?.currentTrack?.id)"><i data-lucide="more-vertical"></i></button>
         </div>
       </div>
 
       <div class="fs-body">
-        <!-- Left: Album cover art and timeline timeline controls -->
+        <!-- Main Player Column -->
         <div class="fs-left">
+          <!-- 1. Full-Width Square Cover Art -->
           <div class="fs-art-wrapper">
             <img id="fs-art" src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300&auto=format&fit=crop" alt="Artwork" />
           </div>
+
+          <!-- 2. Left-aligned Title & Artist -->
           <div class="fs-meta">
-            <span id="fs-artist">ARTIST NAME</span>
-            <h2 id="fs-title">Song Title</h2>
+            <h2 id="fs-title">Song Title <i data-lucide="chevron-right" class="title-arrow"></i></h2>
+            <span id="fs-artist">Artist Name</span>
           </div>
+
+          <!-- 3. Action Pill Buttons Row -->
+          <div class="fs-action-row">
+            <div class="fs-action-pill fs-like-pill" id="fs-like-action-btn">
+              <i data-lucide="thumbs-up"></i> <span>Like</span>
+            </div>
+            <div class="fs-action-pill active" id="fs-lyrics-action-btn" onclick="toggleMobileLyricsView()">
+              <i data-lucide="quote"></i> <span>Lyrics</span>
+            </div>
+          </div>
+
+          <!-- 4. Full-width Progress Slider -->
           <div class="fs-progress-wrapper">
             <input type="range" id="fs-progress-slider" min="0" value="0" step="1" aria-label="Progress Slider" />
             <div class="fs-progress-time">
@@ -183,18 +197,21 @@
               <small id="fs-total-time">0:00</small>
             </div>
           </div>
+
+          <!-- 5. 5-Button Control Row -->
           <div class="fs-controls">
-            <button id="fs-menu-btn" aria-label="Options"><i data-lucide="more-horizontal"></i></button>
+            <button id="fs-shuffle-btn" aria-label="Shuffle"><i data-lucide="shuffle"></i></button>
             <button id="fs-prev-btn" aria-label="Previous Song"><i data-lucide="skip-back"></i></button>
             <button class="fs-play-btn" id="fs-play-btn" aria-label="Play/Pause">
               <i data-lucide="play" fill="currentColor" id="fs-play-icon"></i>
             </button>
             <button id="fs-next-btn" aria-label="Next Song"><i data-lucide="skip-forward"></i></button>
+            <button id="fs-repeat-btn" aria-label="Repeat"><i data-lucide="repeat"></i></button>
           </div>
         </div>
 
-        <!-- Right: Synced scrolling lyric lines -->
-        <div class="fs-right">
+        <!-- Right / Bottom Lyrics View -->
+        <div class="fs-right" id="fs-lyrics-panel-view">
           <div class="fs-lyrics-container" id="fs-lyrics-body">
             <p class="fs-lyric-line placeholder">Select a song and view scrolling lyrics.</p>
           </div>
@@ -234,16 +251,16 @@
 
   <!-- Core Javascript Components Linked Sequentially (Namespace Global Architecture) -->
   <script src="js/data.js?v=15"></script>
-  <script src="js/api.js?v=19"></script>
+  <script src="js/api.js?v=20"></script>
 
-  <script src="js/player.js?v=15"></script>
-  <script src="js/navigation.js?v=15"></script>
+  <script src="js/player.js?v=16"></script>
+  <script src="js/navigation.js?v=16"></script>
   <script src="js/home.js?v=16"></script>
   <script src="js/search.js?v=15"></script>
-  <script src="js/library.js?v=15"></script>
+  <script src="js/library.js?v=19"></script>
   <script src="js/socials.js?v=15"></script>
-  <script src="js/profile.js?v=15"></script>
-  <script src="js/app.js?v=22"></script>
+  <script src="js/profile.js?v=17"></script>
+  <script src="js/app.js?v=32"></script>
   <script src="js/interactions.js?v=15"></script>
 
 </body>

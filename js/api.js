@@ -334,19 +334,22 @@ const musicApi = {
     try {
       const searchRes = await lrclibRequest('/search', { q: cleanTitle });
       if (Array.isArray(searchRes) && searchRes.length > 0) {
-        const syncedMatch = searchRes.find(item => item.syncedLyrics && item.syncedLyrics.trim().length > 50);
+        const syncedMatch = searchRes.find(item => item.syncedLyrics && item.syncedLyrics.trim().length > 30);
         if (syncedMatch) return syncedMatch;
       }
     } catch {}
 
-    // 2. Try search LRCLIB with title + artist
-    try {
-      const searchRes = await lrclibRequest('/search', { q: `${cleanTitle} ${mainArtist}`.trim() });
-      if (Array.isArray(searchRes) && searchRes.length > 0) {
-        const syncedMatch = searchRes.find(item => item.syncedLyrics && item.syncedLyrics.trim().length > 50);
-        if (syncedMatch) return syncedMatch;
-      }
-    } catch {}
+    // 2. Try search LRCLIB with cleanTitle + each artist variant
+    for (const artistItem of artistsList) {
+      if (!artistItem) continue;
+      try {
+        const searchRes = await lrclibRequest('/search', { q: `${cleanTitle} ${artistItem}`.trim() });
+        if (Array.isArray(searchRes) && searchRes.length > 0) {
+          const syncedMatch = searchRes.find(item => item.syncedLyrics && item.syncedLyrics.trim().length > 30);
+          if (syncedMatch) return syncedMatch;
+        }
+      } catch {}
+    }
 
     // 3. Try exact /get variants
     const queryVariants = [

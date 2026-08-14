@@ -32,6 +32,11 @@ function parseLyrics(lyricText) {
     const trimmed = rawLine.trim();
     if (!trimmed) continue;
 
+    // Filter out LRC header metadata tags ([ti:..], [ar:..], [al:..], [by:..], [offset:..])
+    if (/^\[(ti|ar|al|by|length|offset|re|ve):/i.test(trimmed)) {
+      continue;
+    }
+
     timeRegex.lastIndex = 0;
     const timeMatches = [...trimmed.matchAll(timeRegex)];
 
@@ -43,7 +48,11 @@ function parseLyrics(lyricText) {
           const secs = parseInt(match[2], 10);
           const msStr = match[3] || '0';
           const ms = parseInt(msStr, 10);
-          const fraction = ms / (msStr.length === 3 ? 1000 : 100);
+          let fraction = 0;
+          if (msStr.length === 3) fraction = ms / 1000;
+          else if (msStr.length === 2) fraction = ms / 100;
+          else if (msStr.length === 1) fraction = ms / 10;
+
           const time = mins * 60 + secs + fraction;
           result.push({ time, text });
         }
@@ -67,32 +76,55 @@ function parseLyrics(lyricText) {
 
 function getLyricTimeForIndex(idx, total, duration) {
   if (total <= 0) return 0;
-  const startDelay = 10;
-  const endDelay = 10;
+  const startDelay = 25;
+  const endDelay = 15;
   const singingDuration = Math.max(10, duration - startDelay - endDelay);
   return startDelay + (idx / total) * singingDuration;
 }
 
 function getLyricIndexForTime(currentTime, duration, total) {
   if (total <= 0) return -1;
-  const startDelay = 10;
-  const endDelay = 10;
+  const startDelay = 25;
+  const endDelay = 15;
   const singingDuration = Math.max(10, duration - startDelay - endDelay);
   const elapsed = Math.max(0, currentTime - startDelay);
   const progressPct = Math.min(0.99, elapsed / singingDuration);
   return Math.floor(progressPct * total);
 }
 
+let lastActiveLyricIndex = -1;
+let lyricsRafId = null;
+
+function startLyricsAnimationLoop() {
+  if (lyricsRafId) cancelAnimationFrame(lyricsRafId);
+  const step = () => {
+    if (window.player && window.player.isPlaying) {
+      updateFullscreenLyrics(window.player.currentTime || 0);
+    }
+    lyricsRafId = requestAnimationFrame(step);
+  };
+  lyricsRafId = requestAnimationFrame(step);
+}
+
+function stopLyricsAnimationLoop() {
+  if (lyricsRafId) {
+    cancelAnimationFrame(lyricsRafId);
+    lyricsRafId = null;
+  }
+}
+
 // Syncs scrolling position and active highlights to currentTime
 function updateFullscreenLyrics(currentTime) {
   if (!parsedLyrics || parsedLyrics.length === 0) return;
   
-  const hasTimestamps = parsedLyrics.some(item => item.time !== -1);
+  // Require at least 3 valid timestamped lines to consider the track synced
+  const timestampedCount = parsedLyrics.filter(item => item.time !== -1).length;
+  const isSyncedLRC = timestampedCount >= 3;
   const duration = window.player?.duration || 240;
   
   let activeIndex = -1;
   
-  if (hasTimestamps) {
+  if (isSyncedLRC) {
     for (let i = 0; i < parsedLyrics.length; i++) {
       if (parsedLyrics[i].time !== -1 && currentTime >= parsedLyrics[i].time) {
         activeIndex = i;
@@ -104,27 +136,99 @@ function updateFullscreenLyrics(currentTime) {
   
   if (activeIndex >= 0 && activeIndex < parsedLyrics.length) {
     const linesEl = document.querySelectorAll('.fs-lyric-line');
+    
     linesEl.forEach((line, idx) => {
       if (idx === activeIndex) {
-        if (!line.classList.contains('active')) {
-          line.classList.add('active');
-          const container = document.getElementById('fs-lyrics-body');
-          if (container) {
-            const containerH = container.clientHeight;
-            const lineTop = line.offsetTop;
-            const lineH = line.clientHeight;
-            container.scrollTo({
-              top: Math.max(0, lineTop - containerH / 2 + lineH / 2),
-              behavior: 'smooth'
-            });
-          }
-        }
+        line.classList.add('active');
       } else {
         line.classList.remove('active');
       }
     });
+
+    if (activeIndex !== lastActiveLyricIndex) {
+      lastActiveLyricIndex = activeIndex;
+      const activeLine = linesEl[activeIndex];
+      const container = document.getElementById('fs-lyrics-body');
+      if (activeLine && container) {
+        const containerH = container.clientHeight;
+        const lineTop = activeLine.offsetTop;
+        const lineH = activeLine.clientHeight;
+        const targetTop = Math.max(0, lineTop - containerH / 2 + lineH / 2);
+
+        container.scrollTo({
+          top: targetTop,
+          behavior: 'smooth'
+        });
+      }
+    }
   }
 }
+
+function showCastDevicePicker(e) {
+  if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+  const existing = document.getElementById('cast-modal-picker');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'cast-modal-picker';
+  modal.className = 'modal-backdrop active';
+  modal.style.cssText = 'z-index: 10000; animation: fadeIn 0.2s ease;';
+  modal.innerHTML = `
+    <div class="modal-card" style="max-width: 360px; width: 90%; margin: 0 auto; text-align: center; padding: 24px; border-radius: 24px; background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-cast"><path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><path d="M2 12a9 9 0 0 1 8 8"/><path d="M2 16a5 5 0 0 1 4 4"/><line x1="2" x2="2.01" y1="20" y2="20"/></svg>
+          Cast to Device
+        </h3>
+        <button id="close-cast-modal" style="background: transparent; border: none; color: #aaa; cursor: pointer; font-size: 24px; line-height: 1;">&times;</button>
+      </div>
+      <p style="font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 20px;">Select a TV, speaker, or AirPlay device on your Wi-Fi network:</p>
+      
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button class="cast-device-opt" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; color: #fff; cursor: pointer; text-align: left; transition: all 0.2s;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+          <div>
+            <div style="font-weight: 600; font-size: 14px;">Living Room TV (Chromecast)</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.5);">Ready to connect</div>
+          </div>
+        </button>
+
+        <button class="cast-device-opt" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; color: #fff; cursor: pointer; text-align: left; transition: all 0.2s;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+          <div>
+            <div style="font-weight: 600; font-size: 14px;">Bedroom Smart Speaker</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.5);">Google Home</div>
+          </div>
+        </button>
+
+        <button class="cast-device-opt" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; color: #fff; cursor: pointer; text-align: left; transition: all 0.2s;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>
+          <div>
+            <div style="font-weight: 600; font-size: 14px;">Apple TV (AirPlay)</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.5);">AirPlay Audio</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  document.getElementById('close-cast-modal').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (ev) => {
+    if (ev.target === modal) modal.remove();
+  });
+
+  modal.querySelectorAll('.cast-device-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const name = opt.querySelector('div div').innerText;
+      alert(`Connecting audio stream to ${name}...`);
+      modal.remove();
+    });
+  });
+}
+
+window.showCastDevicePicker = showCastDevicePicker;
 
 window.seekToLyricTime = (time) => {
   if (time !== -1 && window.player) {
@@ -139,8 +243,15 @@ window.openFullscreenPlayer = () => {
   const fsPlayer = document.getElementById('fullscreen-player');
   if (fsPlayer && window.player.currentTrack) {
     fsPlayer.classList.add('active');
+    startLyricsAnimationLoop();
   }
 };
+
+window.addEventListener('hashchange', () => {
+  if (window.location.hash === '#/now-playing') {
+    startLyricsAnimationLoop();
+  }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   // Bind Player UI updates
@@ -221,12 +332,64 @@ function bindPlayerEvents() {
     }
   });
 
+  // Cast button click handler
+  const fsCastBtn = document.getElementById('fs-cast-btn');
+  fsCastBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showCastDevicePicker();
+  });
+
   // Full-screen three-dot menu options click
-  const fsMenuBtn = document.getElementById('fs-menu-btn');
-  fsMenuBtn?.addEventListener('click', (e) => {
+  const fsMoreBtn = document.getElementById('fs-more-btn');
+  fsMoreBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
     if (p.currentTrack) {
       window.showTrackMenu(e, p.currentTrack.id);
     }
+  });
+
+  // Full-screen Like Action Pill
+  const fsLikePill = document.getElementById('fs-like-action-btn');
+  fsLikePill?.addEventListener('click', () => {
+    if (p.currentTrack) p.toggleLike(p.currentTrack);
+  });
+
+  // Toggle Lyrics View Button
+  window.toggleMobileLyricsView = () => {
+    const lyricsBtn = document.getElementById('fs-lyrics-action-btn');
+    const lyricsPanel = document.getElementById('fs-lyrics-panel-view');
+    const fsBody = document.querySelector('.fullscreen-player .fs-body');
+    const fsLeft = document.querySelector('.fullscreen-player .fs-left');
+
+    if (!lyricsBtn || !lyricsPanel) return;
+
+    const isCurrentlyActive = lyricsBtn.classList.contains('active');
+
+    if (isCurrentlyActive) {
+      // Turn lyrics OFF -> center player in middle of screen
+      lyricsBtn.classList.remove('active');
+      lyricsPanel.style.display = 'none';
+      if (fsBody) fsBody.classList.remove('show-lyrics');
+      if (fsLeft) fsLeft.classList.add('centered-mode');
+    } else {
+      // Turn lyrics ON
+      lyricsBtn.classList.add('active');
+      lyricsPanel.style.display = 'flex';
+      if (fsBody) fsBody.classList.add('show-lyrics');
+      if (fsLeft) fsLeft.classList.remove('centered-mode');
+      startLyricsAnimationLoop();
+    }
+  };
+
+  // Full-screen Shuffle & Repeat buttons
+  const fsShuffleBtn = document.getElementById('fs-shuffle-btn');
+  fsShuffleBtn?.addEventListener('click', () => {
+    fsShuffleBtn.classList.toggle('active');
+  });
+
+  const fsRepeatBtn = document.getElementById('fs-repeat-btn');
+  fsRepeatBtn?.addEventListener('click', () => {
+    fsRepeatBtn.classList.toggle('active');
   });
 
   // Song / Video Switch pills
@@ -372,8 +535,10 @@ function bindPlayerEvents() {
     if (art) {
       if (isPlaying) {
         art.classList.add('rotate-playing');
+        startLyricsAnimationLoop();
       } else {
         art.classList.remove('rotate-playing');
+        stopLyricsAnimationLoop();
       }
     }
   });
@@ -542,15 +707,27 @@ function bindPlayerEvents() {
 
 function syncLikeBtnColor(trackId) {
   const btn = document.getElementById('player-like-btn');
-  if (!btn) return;
+  const fsLikePill = document.getElementById('fs-like-action-btn');
+  const isLiked = window.player?.isLiked(trackId);
 
-  const isLiked = window.player.isLiked(trackId);
-  if (isLiked) {
-    btn.classList.add('liked');
-    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-heart" style="color: #ff3366;"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`;
-  } else {
-    btn.classList.remove('liked');
-    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-heart"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`;
+  if (btn) {
+    if (isLiked) {
+      btn.classList.add('liked');
+      btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-heart" style="color: #ff3366;"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`;
+    } else {
+      btn.classList.remove('liked');
+      btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-heart"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`;
+    }
+  }
+
+  if (fsLikePill) {
+    if (isLiked) {
+      fsLikePill.classList.add('active');
+      fsLikePill.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 10v12h4V10H7zm-3 0v12h2V10H4zm14 0h-3.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L15.17 3 9.58 8.59C9.22 8.95 9 9.45 9 10v10c0 1.1.9 2 2 2h7.33c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2c0-1.1-.9-2-2-2z"/></svg> <span>Liked</span>`;
+    } else {
+      fsLikePill.classList.remove('active');
+      fsLikePill.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-thumbs-up"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3.13 3.13 0 0 1 3 3.88Z"/></svg> <span>Like</span>`;
+    }
   }
 }
 
@@ -730,9 +907,16 @@ window.playAiSuggestionsFromMenu = async () => {
   }
 };
 
-window.triggerDownloadFromMenu = () => {
+window.triggerDownloadFromMenu = async () => {
   if (!activeMenuTrackId) return;
-  alert('Track downloaded! Saved to offline downloads library.');
+  try {
+    const track = await window.musicStreamingApi.getSongById(activeMenuTrackId);
+    if (track && window.downloadTrack) {
+      window.downloadTrack(track);
+    }
+  } catch (err) {
+    console.error('Download menu error:', err);
+  }
 };
 
 window.toggleLoopFromMenu = () => {
@@ -889,4 +1073,68 @@ function initCircularVisualizer() {
   if (window.player && window.player.isPlaying) {
     animateVisualizer();
   }
+}
+
+window.showCastDevicePicker = function(e) {
+  if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+  const existing = document.getElementById('cast-modal-picker');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'cast-modal-picker';
+  modal.className = 'modal-backdrop active';
+  modal.style.cssText = 'z-index: 10000; animation: fadeIn 0.2s ease;';
+  modal.innerHTML = `
+    <div class="modal-card" style="max-width: 360px; width: 90%; margin: 0 auto; text-align: center; padding: 24px; border-radius: 24px; background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-cast"><path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><path d="M2 12a9 9 0 0 1 8 8"/><path d="M2 16a5 5 0 0 1 4 4"/><line x1="2" x2="2.01" y1="20" y2="20"/></svg>
+          Cast to Device
+        </h3>
+        <button id="close-cast-modal" style="background: transparent; border: none; color: #aaa; cursor: pointer; font-size: 24px; line-height: 1;">&times;</button>
+      </div>
+      <p style="font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 20px;">Select a TV, speaker, or AirPlay device on your Wi-Fi network:</p>
+      
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button class="cast-device-opt" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; color: #fff; cursor: pointer; text-align: left; transition: all 0.2s;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+          <div>
+            <div style="font-weight: 600; font-size: 14px;">Living Room TV (Chromecast)</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.5);">Ready to connect</div>
+          </div>
+        </button>
+
+        <button class="cast-device-opt" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; color: #fff; cursor: pointer; text-align: left; transition: all 0.2s;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+          <div>
+            <div style="font-weight: 600; font-size: 14px;">Bedroom Smart Speaker</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.5);">Google Home</div>
+          </div>
+        </button>
+
+        <button class="cast-device-opt" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; color: #fff; cursor: pointer; text-align: left; transition: all 0.2s;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>
+          <div>
+            <div style="font-weight: 600; font-size: 14px;">Apple TV (AirPlay)</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.5);">AirPlay Audio</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  document.getElementById('close-cast-modal').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
+
+  modal.querySelectorAll('.cast-device-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const name = opt.querySelector('div div').innerText;
+      alert(`Connecting audio stream to ${name}...`);
+      modal.remove();
+    });
+  });
 }

@@ -1,4 +1,311 @@
-/* Library Page and Playlist Details Renderer */
+/* IndexedDB Offline Storage Manager for Offline Music Playback */
+const OFFLINE_DB_NAME = 'ayu_music_offline_db';
+const OFFLINE_DB_VERSION = 1;
+const OFFLINE_STORE_NAME = 'offline_tracks';
+
+function openOfflineDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(OFFLINE_STORE_NAME)) {
+        db.createObjectStore(OFFLINE_STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveOfflineTrack(track, blob) {
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(OFFLINE_STORE_NAME);
+    const item = {
+      id: track.id,
+      title: track.title || 'Unknown Title',
+      artist: track.artist || 'Unknown Artist',
+      artwork: track.artwork || '',
+      duration: track.duration || '0:00',
+      downloadedAt: Date.now(),
+      blob: blob
+    };
+    const req = store.put(item);
+    req.onsuccess = () => resolve(item);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getOfflineTracks() {
+  try {
+    const db = await openOfflineDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(OFFLINE_STORE_NAME, 'readonly');
+      const store = tx.objectStore(OFFLINE_STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function getOfflineTrackById(id) {
+  try {
+    const db = await openOfflineDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(OFFLINE_STORE_NAME, 'readonly');
+      const store = tx.objectStore(OFFLINE_STORE_NAME);
+      const req = store.get(id);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function deleteOfflineTrack(id) {
+  try {
+    const db = await openOfflineDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(OFFLINE_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(OFFLINE_STORE_NAME);
+      const req = store.delete(id);
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => resolve(false);
+    });
+  } catch {
+    return false;
+  }
+}
+
+window.getOfflineTracks = getOfflineTracks;
+window.getOfflineTrackById = getOfflineTrackById;
+window.deleteOfflineTrack = deleteOfflineTrack;
+
+window.downloadTrack = async (track) => {
+  if (!track || !track.id) return;
+
+  // 1. REAL-TIME ON-SCREEN PROGRESS TOAST
+  let toast = document.getElementById('download-progress-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'download-progress-toast';
+    toast.style.cssText = 'position: fixed; bottom: 24px; right: 24px; z-index: 10000; background: #141414; border: 1px solid rgba(56, 239, 125, 0.5); padding: 16px 20px; border-radius: 16px; color: #ffffff; box-shadow: 0 12px 40px rgba(0,0,0,0.8); display: flex; align-items: center; gap: 14px; min-width: 320px; max-width: 400px; font-family: system-ui, -apple-system, sans-serif; transition: all 0.3s ease;';
+    document.body.appendChild(toast);
+  }
+
+  // Initial Toast Content
+  toast.innerHTML = `
+    <div style="background: rgba(56,239,125,0.15); color: #38ef7d; width: 40px; height: 40px; border-radius: 50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+    </div>
+    <div style="flex: 1; min-width: 0; text-align: left;">
+      <div style="font-size: 14px; font-weight: 700; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">Downloading ${track.title || 'Song'}</div>
+      <div style="font-size: 12px; color: rgba(255,255,255,0.7); font-weight: 500;">Connecting...</div>
+      <div style="width: 100%; background: rgba(255,255,255,0.15); height: 5px; border-radius: 3px; margin-top: 6px; overflow: hidden;">
+        <div style="width: 10%; background: #38ef7d; height: 100%; transition: width 0.15s ease; border-radius: 3px;"></div>
+      </div>
+    </div>
+  `;
+
+  try {
+    let streamUrl = track.streamUrl;
+    if (!streamUrl && window.musicStreamingApi) {
+      streamUrl = await window.musicStreamingApi.getStream(track.id);
+    }
+    if (!streamUrl) {
+      if (toast) toast.remove();
+      alert(`Could not fetch audio stream for "${track.title}".`);
+      return;
+    }
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', streamUrl, true);
+    xhr.responseType = 'blob';
+
+    xhr.onprogress = (event) => {
+      let percent = 15;
+      let loadedMB = (event.loaded / (1024 * 1024)).toFixed(1);
+      let totalMB = '0.0';
+
+      if (event.lengthComputable && event.total > 0) {
+        percent = Math.round((event.loaded / event.total) * 100);
+        totalMB = (event.total / (1024 * 1024)).toFixed(1);
+      } else {
+        percent = Math.min(95, Math.round(15 + (event.loaded / (1024 * 1024)) * 15));
+      }
+
+      toast.innerHTML = `
+        <div style="background: rgba(56,239,125,0.15); color: #38ef7d; width: 40px; height: 40px; border-radius: 50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        </div>
+        <div style="flex: 1; min-width: 0; text-align: left;">
+          <div style="font-size: 14px; font-weight: 700; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">Downloading ${track.title || 'Song'}</div>
+          <div style="font-size: 12px; color: rgba(255,255,255,0.7); font-weight: 500;">${percent}% ${event.lengthComputable ? `(${loadedMB} / ${totalMB} MB)` : `(${loadedMB} MB downloaded)`}</div>
+          <div style="width: 100%; background: rgba(255,255,255,0.15); height: 5px; border-radius: 3px; margin-top: 6px; overflow: hidden;">
+            <div style="width: ${percent}%; background: #38ef7d; height: 100%; transition: width 0.15s ease; border-radius: 3px;"></div>
+          </div>
+        </div>
+      `;
+    };
+
+    xhr.onload = async () => {
+      if (xhr.status === 200 || xhr.status === 0) {
+        const blob = xhr.response;
+        const cleanFileName = `${track.title} - ${track.artist}`.replace(/[/\\?%*:|"<>]/g, '_');
+
+        // FORCE DIRECT DISK DOWNLOAD VIA BLOB URL (NO NEW TAB!)
+        const blobUrl = URL.createObjectURL(blob);
+        const saveAnchor = document.createElement('a');
+        saveAnchor.href = blobUrl;
+        saveAnchor.download = `${cleanFileName}.mp3`;
+        document.body.appendChild(saveAnchor);
+        saveAnchor.click();
+        saveAnchor.remove();
+
+        // OFFLINE INDEXEDDB STORE
+        await saveOfflineTrack(track, blob);
+
+        if (toast) {
+          toast.style.borderColor = '#38ef7d';
+          toast.innerHTML = `
+            <div style="background: #38ef7d; color: #000; width: 40px; height: 40px; border-radius: 50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:bold; font-size: 18px;">✓</div>
+            <div style="text-align: left;">
+              <div style="font-size: 14px; font-weight: 700; color: #ffffff;">Download Complete!</div>
+              <div style="font-size: 12px; color: #38ef7d; font-weight: 600;">Saved as MP3 & Offline Ready</div>
+            </div>
+          `;
+          setTimeout(() => toast?.remove(), 3500);
+        }
+
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+
+        if (window.location.hash === '#/library') window.renderLibrary();
+        if (window.location.hash === '#/downloads') window.renderDownloadsPage();
+      }
+    };
+
+    xhr.onerror = () => {
+      if (toast) toast.remove();
+      alert(`Download failed. Please check network connection.`);
+    };
+
+    xhr.send();
+  } catch (err) {
+    console.error('Download error:', err);
+    if (toast) toast.remove();
+  }
+};
+
+window.renderDownloadsPage = async () => {
+  const container = document.getElementById('main-viewport');
+  if (!container) return;
+
+  const tracks = await getOfflineTracks();
+
+  container.innerHTML = `
+    <div class="page animate-fade-up">
+      <div class="detail-header" style="display: flex; align-items: center; gap: 32px; margin-bottom: 36px;">
+        <div class="detail-artwork" style="width: 180px; height: 180px; background: linear-gradient(135deg, #11998e, #38ef7d); display: flex; align-items: center; justify-content: center; border-radius: 24px; box-shadow: 0 15px 35px rgba(0,0,0,0.5);">
+          <i data-lucide="download" style="width: 72px; height: 72px; color: #ffffff;"></i>
+        </div>
+        <div class="detail-info">
+          <span class="detail-type" style="color: #38ef7d; font-weight: 700; letter-spacing: 1px; font-size: 13px;">OFFLINE STORAGE</span>
+          <h1 class="detail-title" style="font-size: 42px; margin: 8px 0; font-weight: 800;">Downloads</h1>
+          <p class="detail-desc" style="color: var(--text-secondary);">${tracks.length} tracks downloaded & available to play without internet</p>
+          <div class="detail-actions" style="margin-top: 24px; display: flex; gap: 16px;">
+            ${tracks.length > 0 ? `
+              <button class="primary-btn" onclick="playAllOfflineTracks()" style="padding: 12px 32px; border-radius: 30px; font-weight: 700; background: #38ef7d; color: #000; display: flex; align-items: center; gap: 8px; cursor: pointer; border: none; font-size: 15px;">
+                <i data-lucide="play" fill="currentColor"></i> Play Offline
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+
+      <div class="tracklist-section" style="margin-top: 40px;">
+        ${tracks.length === 0 ? `
+          <div style="border: 1px dashed var(--border-color); border-radius: 20px; padding: 48px; text-align: center;">
+            <i data-lucide="download-cloud" style="width: 48px; height: 48px; color: var(--text-muted); margin-bottom: 16px;"></i>
+            <p style="color: var(--text-secondary); font-size: 16px; margin-bottom: 8px;">No downloaded songs yet.</p>
+            <p style="color: var(--text-muted); font-size: 13px;">Click the 3-dots menu on any song and select "Download" to save it to your system and play offline.</p>
+          </div>
+        ` : `
+          <div class="tracklist-header" style="display: grid; grid-template-columns: 48px 1fr 120px 100px; padding: 12px 16px; color: var(--text-muted); font-size: 12px; font-weight: 700; border-bottom: 1px solid var(--border-color);">
+            <span>#</span>
+            <span>TITLE</span>
+            <span>DURATION</span>
+            <span>ACTION</span>
+          </div>
+          <div class="tracklist-body">
+            ${tracks.map((t, idx) => `
+              <div class="track-row" onclick="playSingleOfflineTrack('${t.id}')" style="display: grid; grid-template-columns: 48px 1fr 120px 100px; align-items: center; padding: 12px 16px; border-radius: 12px; cursor: pointer; transition: background 0.2s;">
+                <span style="color: var(--text-muted); font-weight: 600;">${idx + 1}</span>
+                <div style="display: flex; align-items: center; gap: 16px; min-width: 0;">
+                  <img src="${t.artwork || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=100&auto=format&fit=crop'}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;" />
+                  <div style="min-width: 0;">
+                    <div style="font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.title}</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.artist} • <span style="color: #38ef7d; font-weight: 600;">Offline Ready</span></div>
+                  </div>
+                </div>
+                <span style="color: var(--text-secondary); font-size: 13px;">${t.duration}</span>
+                <div>
+                  <button onclick="event.stopPropagation(); removeOfflineTrack('${t.id}')" style="background: rgba(255,51,102,0.15); border: none; color: #ff3366; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer;">Delete</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+
+  lucide.createIcons();
+};
+
+window.playSingleOfflineTrack = async (id) => {
+  const offlineTrack = await getOfflineTrackById(id);
+  if (!offlineTrack || !offlineTrack.blob) return;
+
+  const blobUrl = URL.createObjectURL(offlineTrack.blob);
+  const playableTrack = {
+    id: offlineTrack.id,
+    title: offlineTrack.title,
+    artist: offlineTrack.artist,
+    artwork: offlineTrack.artwork,
+    duration: offlineTrack.duration,
+    streamUrl: blobUrl
+  };
+
+  window.player.playTrack(playableTrack);
+};
+
+window.playAllOfflineTracks = async () => {
+  const tracks = await getOfflineTracks();
+  if (tracks.length === 0) return;
+
+  const playableTracks = tracks.map(t => ({
+    id: t.id,
+    title: t.title,
+    artist: t.artist,
+    artwork: t.artwork,
+    duration: t.duration,
+    streamUrl: URL.createObjectURL(t.blob)
+  }));
+
+  window.player.playTrack(playableTracks[0], playableTracks);
+};
+
+window.removeOfflineTrack = async (id) => {
+  if (confirm('Delete this song from your offline downloads?')) {
+    await deleteOfflineTrack(id);
+    window.renderDownloadsPage();
+  }
+};
 
 function getLocalPlaylists() {
   try {
@@ -8,13 +315,12 @@ function getLocalPlaylists() {
   }
 }
 
-function renderLibrary() {
+async function renderLibrary() {
   const container = document.getElementById('main-viewport');
   if (!container) return;
 
   const playlists = getLocalPlaylists();
-
-
+  const offlineTracks = await getOfflineTracks();
 
   container.innerHTML = `
     <div class="page animate-fade-up">
@@ -45,13 +351,13 @@ function renderLibrary() {
             </button>
           </div>
 
-          <!-- Offline / Downloads Placeholder -->
-          <div class="library-box" style="cursor: default;">
+          <!-- Offline / Downloads Card -->
+          <div class="library-box" onclick="navigateTo('#/downloads')">
             <div class="library-box-left">
               <span class="library-box-title">Downloads</span>
-              <span class="library-box-desc">Offline music</span>
+              <span class="library-box-desc">${offlineTracks.length} songs offline</span>
             </div>
-            <button class="library-box-btn" style="background-color: #252525; color: #7f8797; cursor: default;">
+            <button class="library-box-btn" style="background-color: #38ef7d; color: #000;">
               <i data-lucide="download"></i>
             </button>
           </div>

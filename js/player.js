@@ -996,8 +996,8 @@ const player = {
             ) {
 
                 this.lyrics =
-                    data?.plainLyrics ||
                     data?.syncedLyrics ||
+                    data?.plainLyrics ||
                     "Lyrics not found.";
 
 

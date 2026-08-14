@@ -17,8 +17,39 @@ function renderProfile() {
     recentCount = recentSongs.length;
   } catch {}
 
-  // Standard metrics
-  const minutesListened = recentCount * 3 + Math.floor(Math.random() * 20); // estimate minutes
+  const minutesListened = recentCount * 3 + 15;
+
+  // Dynamic Favorite Artists calculation from Liked songs & Recent History
+  const likedSongs = window.player?.liked || [];
+  const artistCounts = {};
+  const artistArtworks = {};
+
+  [...likedSongs, ...recentSongs].forEach(track => {
+    if (!track || !track.artist) return;
+    const primaryArtist = track.artist.split(/[,&]/)[0].trim();
+    if (!primaryArtist) return;
+
+    artistCounts[primaryArtist] = (artistCounts[primaryArtist] || 0) + 1;
+    if (!artistArtworks[primaryArtist] && (track.artwork || track.image)) {
+      artistArtworks[primaryArtist] = track.artwork || track.image;
+    }
+  });
+
+  let topArtists = Object.keys(artistCounts)
+    .sort((a, b) => artistCounts[b] - artistCounts[a])
+    .map(name => ({
+      name: name,
+      count: artistCounts[name],
+      artwork: artistArtworks[name] || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=150&auto=format&fit=crop'
+    }));
+
+  if (topArtists.length === 0) {
+    topArtists = [
+      { name: 'Arijit Singh', count: 12, artwork: 'https://c.saavncdn.com/artist/Arijit_Singh_002_20230323062147_500x500.jpg' },
+      { name: 'Pritam', count: 8, artwork: 'https://c.saavncdn.com/artist/Pritam_003_20230323062147_500x500.jpg' },
+      { name: 'AR Rahman', count: 5, artwork: 'https://c.saavncdn.com/artist/A_R_Rahman_002_20230323062147_500x500.jpg' }
+    ];
+  }
 
   container.innerHTML = `
     <div class="page animate-fade-up">
@@ -37,8 +68,8 @@ function renderProfile() {
       <!-- Stats Grid -->
       <div class="profile-stats-grid">
         <div class="profile-stat-card">
-          <div class="profile-stat-val" style="color: #38ef7d;">${recentCount + 42}</div>
-          <div class="profile-stat-lbl">Songs Played</div>
+          <div class="profile-stat-val" style="color: #38ef7d;">${recentCount + likedSongs.length}</div>
+          <div class="profile-stat-lbl">Songs Liked & Played</div>
         </div>
         <div class="profile-stat-card">
           <div class="profile-stat-val" style="color: #c09bf8;">${playlistsCount}</div>
@@ -56,30 +87,16 @@ function renderProfile() {
         <div>
           <h2 class="section-title" style="margin-bottom:24px; font-size:20px;">Favorite Artists</h2>
           
-          <div style="display:flex; flex-direction:column; gap:16px;">
-            <div style="display:flex; align-items:center; gap:12px;">
-              <img src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=100&auto=format&fit=crop" style="width:48px; height:48px; border-radius:50%; object-fit:cover;" />
-              <div>
-                <b style="font-size:14px;">Arijit Singh</b>
-                <p style="font-size:12px; color:var(--text-secondary);">4,200 plays</p>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            ${topArtists.slice(0, 5).map(artist => `
+              <div class="favorite-artist-item" onclick="navigateTo('#/artist/${encodeURIComponent(artist.name)}')" style="display:flex; align-items:center; gap:14px; cursor:pointer; padding: 10px 14px; border-radius: 14px; background: rgba(255,255,255,0.03); transition: background 0.2s;">
+                <img src="${artist.artwork}" style="width:48px; height:48px; border-radius:50%; object-fit:cover; box-shadow: 0 4px 10px rgba(0,0,0,0.4);" />
+                <div>
+                  <b style="font-size:14px; color:#fff; display:block;">${artist.name}</b>
+                  <p style="font-size:12px; color:var(--text-secondary); margin-top:2px;">${artist.count} liked / played tracks</p>
+                </div>
               </div>
-            </div>
-
-            <div style="display:flex; align-items:center; gap:12px;">
-              <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=100&auto=format&fit=crop" style="width:48px; height:48px; border-radius:50%; object-fit:cover;" />
-              <div>
-                <b style="font-size:14px;">Jubin Nautiyal</b>
-                <p style="font-size:12px; color:var(--text-secondary);">1,840 plays</p>
-              </div>
-            </div>
-
-            <div style="display:flex; align-items:center; gap:12px;">
-              <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&auto=format&fit=crop" style="width:48px; height:48px; border-radius:50%; object-fit:cover;" />
-              <div>
-                <b style="font-size:14px;">Neha Kakkar</b>
-                <p style="font-size:12px; color:var(--text-secondary);">950 plays</p>
-              </div>
-            </div>
+            `).join('')}
           </div>
         </div>
 

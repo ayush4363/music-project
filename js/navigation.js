@@ -5,6 +5,7 @@ const routes = {
   '/': () => window.renderHome && window.renderHome(),
   '/search': () => window.renderSearch && window.renderSearch(),
   '/library': () => window.renderLibrary && window.renderLibrary(),
+  '/downloads': () => window.renderDownloadsPage && window.renderDownloadsPage(),
   '/socials': () => window.renderSocials && window.renderSocials(),
   '/profile': () => window.renderProfile && window.renderProfile(),
   '/playlist': (id) => window.renderPlaylistDetail && window.renderPlaylistDetail(id),

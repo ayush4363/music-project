@@ -1951,6 +1951,12 @@ button:focus, button:active, button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 30;
+}
+
+.fs-close-btn *, .fs-header-tools button * {
+  pointer-events: none;
 }
 
 .fs-close-btn:hover, .fs-header-tools button:hover {
@@ -1958,7 +1964,7 @@ button:focus, button:active, button:focus-visible {
   background-color: rgba(255, 255, 255, 0.08);
 }
 
-.fs-close-btn i, .fs-header-tools button i {
+.fs-close-btn i, .fs-header-tools button i, .fs-close-btn svg, .fs-header-tools button svg {
   width: 24px;
   height: 24px;
 }
@@ -2008,12 +2014,12 @@ button:focus, button:active, button:focus-visible {
 }
 
 .fs-left {
-  width: 70%;
+  width: 45%;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 20px;
-  margin-left: -50px;
+  gap: 16px;
+  margin: 0 auto;
   padding-bottom: 24px;
   overflow-y: auto;
   scrollbar-width: none;
@@ -2024,11 +2030,11 @@ button:focus, button:active, button:focus-visible {
 }
 
 .fs-art-wrapper {
-  width: min(360px, 32vh);
-  height: min(360px, 32vh);
+  width: min(380px, 36vh);
+  height: min(380px, 36vh);
   flex-shrink: 0;
   margin: 0 auto;
-  border-radius: 20px;
+  border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
   border: 1px solid rgba(255,255,255,0.05);
@@ -2038,37 +2044,92 @@ button:focus, button:active, button:focus-visible {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 16px;
 }
 
 .fs-meta {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  width: min(360px, 32vh);
+  gap: 4px;
+  width: min(380px, 100%);
   margin: 0 auto;
   flex-shrink: 0;
 }
 
 #fs-artist {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.2px;
+  text-transform: none;
 }
 
 #fs-title {
   font-family: 'DM Sans', sans-serif;
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.title-arrow {
+  width: 20px;
+  height: 20px;
+  opacity: 0.8;
+}
+
+.fs-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: min(380px, 100%);
+  margin: 0 auto;
+  overflow-x: auto;
+  padding: 4px 0;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.fs-action-row::-webkit-scrollbar {
+  display: none;
+}
+
+.fs-action-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition-smooth);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.fs-action-pill:hover,
+.fs-action-pill.active {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.fs-action-pill svg,
+.fs-action-pill i {
+  width: 16px;
+  height: 16px;
 }
 
 .fs-progress-wrapper {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: min(360px, 40vh);
+  width: min(380px, 100%);
   margin: 0 auto;
   flex-shrink: 0;
 }
@@ -2110,9 +2171,8 @@ button:focus, button:active, button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
-  max-width: 320px;
-  margin-left: 50px;
+  width: min(380px, 100%);
+  margin: 0 auto;
   flex-shrink: 0;
 }
 
@@ -2226,7 +2286,7 @@ button:focus, button:active, button:focus-visible {
 }
 
 .fs-lyric-line:hover {
-  color: rgba(255, 255, 255, 0.7);
+  opacity: 0.9;
 }
 
 .fs-lyric-line.placeholder {
