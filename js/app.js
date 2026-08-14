@@ -135,31 +135,40 @@ function updateFullscreenLyrics(currentTime) {
   }
   
   if (activeIndex >= 0 && activeIndex < parsedLyrics.length) {
-    const linesEl = document.querySelectorAll('.fs-lyric-line');
-    
-    linesEl.forEach((line, idx) => {
-      if (idx === activeIndex) {
-        line.classList.add('active');
-      } else {
-        line.classList.remove('active');
+    const containers = [
+      document.getElementById('fs-lyrics-body'),
+      document.getElementById('mobile-lyrics-body')
+    ];
+
+    containers.forEach(container => {
+      if (!container) return;
+      const linesEl = container.querySelectorAll('.fs-lyric-line');
+      linesEl.forEach((line, idx) => {
+        if (idx === activeIndex) {
+          line.classList.add('active');
+        } else {
+          line.classList.remove('active');
+        }
+      });
+
+      if (activeIndex !== lastActiveLyricIndex) {
+        const activeLine = linesEl[activeIndex];
+        if (activeLine) {
+          const containerH = container.clientHeight;
+          const lineTop = activeLine.offsetTop;
+          const lineH = activeLine.clientHeight;
+          const targetTop = Math.max(0, lineTop - containerH / 2 + lineH / 2);
+
+          container.scrollTo({
+            top: targetTop,
+            behavior: 'smooth'
+          });
+        }
       }
     });
 
     if (activeIndex !== lastActiveLyricIndex) {
       lastActiveLyricIndex = activeIndex;
-      const activeLine = linesEl[activeIndex];
-      const container = document.getElementById('fs-lyrics-body');
-      if (activeLine && container) {
-        const containerH = container.clientHeight;
-        const lineTop = activeLine.offsetTop;
-        const lineH = activeLine.clientHeight;
-        const targetTop = Math.max(0, lineTop - containerH / 2 + lineH / 2);
-
-        container.scrollTo({
-          top: targetTop,
-          behavior: 'smooth'
-        });
-      }
     }
   }
 }
@@ -355,31 +364,61 @@ function bindPlayerEvents() {
   });
 
   // Toggle Lyrics View Button
-  window.toggleMobileLyricsView = () => {
+  window.toggleMobileLyricsView = (e) => {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+
     const lyricsBtn = document.getElementById('fs-lyrics-action-btn');
-    const lyricsPanel = document.getElementById('fs-lyrics-panel-view');
+    const desktopPanel = document.getElementById('fs-lyrics-panel-view');
+    const mobileScreen = document.getElementById('mobile-lyrics-screen');
     const fsBody = document.querySelector('.fullscreen-player .fs-body');
     const fsLeft = document.querySelector('.fullscreen-player .fs-left');
 
-    if (!lyricsBtn || !lyricsPanel) return;
+    const isMobile = window.innerWidth <= 768;
 
-    const isCurrentlyActive = lyricsBtn.classList.contains('active');
-
-    if (isCurrentlyActive) {
-      // Turn lyrics OFF -> center player in middle of screen
-      lyricsBtn.classList.remove('active');
-      lyricsPanel.style.display = 'none';
-      if (fsBody) fsBody.classList.remove('show-lyrics');
-      if (fsLeft) fsLeft.classList.add('centered-mode');
-    } else {
-      // Turn lyrics ON
-      lyricsBtn.classList.add('active');
-      lyricsPanel.style.display = 'flex';
-      if (fsBody) fsBody.classList.add('show-lyrics');
-      if (fsLeft) fsLeft.classList.remove('centered-mode');
-      startLyricsAnimationLoop();
+    if (isMobile && mobileScreen) {
+      const isSheetOpen = mobileScreen.classList.contains('active');
+      if (isSheetOpen) {
+        mobileScreen.classList.remove('active');
+        if (lyricsBtn) lyricsBtn.classList.remove('active');
+        document.body.style.overflow = '';
+      } else {
+        mobileScreen.classList.add('active');
+        if (lyricsBtn) lyricsBtn.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        try {
+          history.pushState({ mobileLyricsOpen: true }, '');
+        } catch {}
+        if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+        startLyricsAnimationLoop();
+      }
+    } else if (desktopPanel) {
+      // Desktop toggle
+      const isCurrentlyActive = lyricsBtn?.classList.contains('active');
+      if (isCurrentlyActive) {
+        lyricsBtn?.classList.remove('active');
+        desktopPanel.style.display = 'none';
+        if (fsBody) fsBody.classList.remove('show-lyrics');
+        if (fsLeft) fsLeft.classList.add('centered-mode');
+      } else {
+        lyricsBtn?.classList.add('active');
+        desktopPanel.style.display = 'flex';
+        if (fsBody) fsBody.classList.add('show-lyrics');
+        if (fsLeft) fsLeft.classList.remove('centered-mode');
+        startLyricsAnimationLoop();
+      }
     }
   };
+
+  // Android Back Button listener to close mobile lyrics overlay first
+  window.addEventListener('popstate', () => {
+    const mobileScreen = document.getElementById('mobile-lyrics-screen');
+    if (mobileScreen && mobileScreen.classList.contains('active')) {
+      mobileScreen.classList.remove('active');
+      const lyricsBtn = document.getElementById('fs-lyrics-action-btn');
+      if (lyricsBtn) lyricsBtn.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+  });
 
   // Full-screen Shuffle & Repeat buttons
   const fsShuffleBtn = document.getElementById('fs-shuffle-btn');
@@ -388,23 +427,168 @@ function bindPlayerEvents() {
   });
 
   const fsRepeatBtn = document.getElementById('fs-repeat-btn');
-  fsRepeatBtn?.addEventListener('click', () => {
-    fsRepeatBtn.classList.toggle('active');
-  });
+  // Fullscreen Mode Toggle Handler
+  window.toggleFullscreenMode = function() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.error('Error entering fullscreen:', err);
+      });
+    } else {
+      document.exitFullscreen().catch(err => {
+        console.error('Error exiting fullscreen:', err);
+      });
+    }
+  };
 
-  // Song / Video Switch pills
-  const fsPills = document.querySelectorAll('.fs-pill');
-  fsPills.forEach(pill => {
-    pill.addEventListener('click', () => {
-      fsPills.forEach(btn => btn.classList.remove('active'));
-      pill.classList.add('active');
-      if (pill.innerText.trim() === 'Video') {
-        alert('Video visualizer mode selected. Streaming video elements where available (mock activation)...');
-      } else {
-        // Song mode
+  // Universal YouTube Video Integration for All Songs
+  window.getTrackVideoId = function(track) {
+    if (!track) return 'BddP6PYo2gs';
+    
+    if (track.videoId) return track.videoId;
+    if (track.youtubeId) return track.youtubeId;
+
+    const title = (track.title || '').toLowerCase();
+
+    // Map popular songs directly to their official YouTube Music Videos
+    if (title.includes('kesariya')) return 'BddP6PYo2gs';
+    if (title.includes('chaleya')) return 'VAdGW7QDJiU';
+    if (title.includes('apna bana le')) return 'ElZfdU54Cp8';
+    if (title.includes('tum hi ho')) return 'UMb8vfypgUU';
+    if (title.includes('raataan lambiyan')) return 'gvyUuxdRdR4';
+    if (title.includes('heeriye')) return 'RLzC55ai0eo';
+    if (title.includes('makhna')) return '9J9xT6e-M-8';
+    if (title.includes('deva deva')) return 'mNuhKUOD_g0';
+    if (title.includes('pasoori')) return '5Eqb_-j3FDA';
+    if (title.includes('maan meri jaan')) return 'X7v6-XpE8m0';
+    if (title.includes('kahani suno')) return '1-B_N7-1xNo';
+    if (title.includes('samjhawan')) return 'h2j83tWp8B0';
+    if (title.includes('teriyaan')) return '2g811q_Dk-o';
+    if (title.includes('jhoom')) return 'wE4T1kR__hE';
+    if (title.includes('saami saami')) return 'K18A1g4gK-8';
+    if (title.includes('oo antava')) return 'Q1bZ-_1X8v4';
+    if (title.includes('srivalli')) return 'hcMzwUrD8a0';
+
+    return null;
+  };
+
+  window.loadTrackVideo = function(track) {
+    const container = document.getElementById('fs-video-container');
+    if (!container || !track) return;
+
+    const videoId = window.getTrackVideoId(track);
+    const origin = window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'https://localhost';
+
+    let embedUrl = '';
+    if (videoId) {
+      embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=1&enablejsapi=1&origin=${encodeURIComponent(origin)}`;
+    } else {
+      const searchQuery = `${track.title} ${track.artist} official video`;
+      embedUrl = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(searchQuery)}&autoplay=1&mute=0&enablejsapi=1&origin=${encodeURIComponent(origin)}`;
+    }
+
+    container.innerHTML = `
+      <iframe id="fs-video-iframe" 
+        src="${embedUrl}" 
+        title="${track.title} Music Video"
+        frameborder="0" 
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+        allowfullscreen 
+        style="width: 100%; height: 100%; border: none; border-radius: 16px; object-fit: cover; background: #000;">
+      </iframe>
+    `;
+  };
+
+  window.switchPlayerMode = function(mode) {
+    const songPill = document.getElementById('fs-pill-song');
+    const videoPill = document.getElementById('fs-pill-video');
+    const artWrapper = document.getElementById('fs-art-wrapper') || document.querySelector('.fs-art-wrapper');
+    const artImg = document.getElementById('fs-art');
+    const videoContainer = document.getElementById('fs-video-container');
+
+    if (mode === 'video') {
+      if (songPill) songPill.classList.remove('active');
+      if (videoPill) videoPill.classList.add('active');
+      if (artWrapper) artWrapper.classList.add('video-mode');
+
+      if (artImg) artImg.style.display = 'none';
+      if (videoContainer) {
+        videoContainer.style.display = 'block';
+        const currentTrack = window.player?.currentTrack;
+        if (currentTrack && (!videoContainer.querySelector('iframe') || videoContainer.getAttribute('data-track-id') !== String(currentTrack.id))) {
+          videoContainer.setAttribute('data-track-id', String(currentTrack.id));
+          window.loadTrackVideo(currentTrack);
+        }
+      }
+    } else {
+      // Song mode
+      if (videoPill) videoPill.classList.remove('active');
+      if (songPill) songPill.classList.add('active');
+      if (artWrapper) artWrapper.classList.remove('video-mode');
+
+      if (videoContainer) {
+        videoContainer.style.display = 'none';
+      }
+      if (artImg) artImg.style.display = 'block';
+    }
+  };
+
+  // Sync Video mode on track change
+  if (window.player) {
+    window.player.on('track-change', (track) => {
+      const videoPill = document.getElementById('fs-pill-video');
+      const videoContainer = document.getElementById('fs-video-container');
+      if (videoPill && videoPill.classList.contains('active') && videoContainer) {
+        videoContainer.setAttribute('data-track-id', String(track.id));
+        window.loadTrackVideo(track);
       }
     });
-  });
+  }
+
+  window.switchPlayerMode = function(mode) {
+    const songPill = document.getElementById('fs-pill-song');
+    const videoPill = document.getElementById('fs-pill-video');
+    const artWrapper = document.getElementById('fs-art-wrapper') || document.querySelector('.fs-art-wrapper');
+    const artImg = document.getElementById('fs-art');
+    const videoContainer = document.getElementById('fs-video-container');
+
+    if (mode === 'video') {
+      if (songPill) songPill.classList.remove('active');
+      if (videoPill) videoPill.classList.add('active');
+      if (artWrapper) artWrapper.classList.add('video-mode');
+
+      if (artImg) artImg.style.display = 'none';
+      if (videoContainer) {
+        videoContainer.style.display = 'block';
+        const currentTrack = window.player?.currentTrack;
+        if (currentTrack && (!videoContainer.querySelector('canvas') || videoContainer.getAttribute('data-track-id') !== String(currentTrack.id))) {
+          videoContainer.setAttribute('data-track-id', String(currentTrack.id));
+          window.loadTrackVideo(currentTrack);
+        }
+      }
+    } else {
+      // Song mode
+      if (videoPill) videoPill.classList.remove('active');
+      if (songPill) songPill.classList.add('active');
+      if (artWrapper) artWrapper.classList.remove('video-mode');
+
+      if (videoContainer) {
+        videoContainer.style.display = 'none';
+      }
+      if (artImg) artImg.style.display = 'block';
+    }
+  };
+
+  // Sync Video mode on track change
+  if (window.player) {
+    window.player.on('track-change', (track) => {
+      const videoPill = document.getElementById('fs-pill-video');
+      const videoContainer = document.getElementById('fs-video-container');
+      if (videoPill && videoPill.classList.contains('active') && videoContainer) {
+        videoContainer.setAttribute('data-track-id', String(track.id));
+        window.loadTrackVideo(track);
+      }
+    });
+  }
 
   // Maximize (Fullscreen window toggle)
   const fsExpandBtn = document.querySelector('.fs-header-tools button[aria-label="Maximize"]');
@@ -641,67 +825,48 @@ function bindPlayerEvents() {
       }
     }
 
-    // Fullscreen lyrics container update
+    // Fullscreen lyrics container update (Desktop & Mobile)
     const fsLyricsBody = document.getElementById('fs-lyrics-body');
-    if (fsLyricsBody) {
-      if (!lyricsText) {
-        fsLyricsBody.innerHTML = `<p class="fs-lyric-line placeholder">Loading lyrics...</p>`;
-        parsedLyrics = [];
-      } else if (lyricsText === 'Lyrics not found.') {
-        fsLyricsBody.innerHTML = `<p class="fs-lyric-line placeholder">Lyrics not found.</p>`;
-        parsedLyrics = [];
+    const mobileLyricsBody = document.getElementById('mobile-lyrics-body');
+
+    parsedLyrics = parseLyrics(lyricsText);
+
+    const updateLyricsContainer = (container) => {
+      if (!container) return;
+      if (!lyricsText || lyricsText === 'Lyrics not found.' || parsedLyrics.length === 0) {
+        container.innerHTML = `<p class="fs-lyric-line placeholder">Lyrics not found.</p>`;
       } else {
-        parsedLyrics = parseLyrics(lyricsText);
-        if (parsedLyrics.length === 0) {
-          fsLyricsBody.innerHTML = `<p class="fs-lyric-line placeholder">Lyrics not found.</p>`;
-        } else {
-          fsLyricsBody.innerHTML = parsedLyrics.map((line, idx) => `
-            <p class="fs-lyric-line" data-index="${idx}" data-time="${line.time}">${line.text}</p>
-          `).join('');
+        container.innerHTML = parsedLyrics.map((line, idx) => `
+          <p class="fs-lyric-line" data-index="${idx}" data-time="${line.time}">${line.text}</p>
+        `).join('');
 
-          // Bind clicks dynamically with unified seek time calculations
-          fsLyricsBody.querySelectorAll('.fs-lyric-line').forEach(el => {
-            el.addEventListener('click', () => {
-              const idx = parseInt(el.getAttribute('data-index'), 10);
-              const time = parseFloat(el.getAttribute('data-time'));
-              const duration = window.player?.duration || 240;
+        container.querySelectorAll('.fs-lyric-line').forEach(el => {
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(el.getAttribute('data-index'), 10);
+            const time = parseFloat(el.getAttribute('data-time'));
+            const duration = window.player?.duration || 240;
 
-              let targetTime = time;
-              if (targetTime === -1) {
-                targetTime = getLyricTimeForIndex(idx, parsedLyrics.length, duration);
+            let targetTime = time;
+            if (targetTime === -1) {
+              targetTime = getLyricTimeForIndex(idx, parsedLyrics.length, duration);
+            }
+
+            if (window.player && targetTime >= 0) {
+              window.player.seek(targetTime);
+              if (!window.player.isPlaying && typeof window.player.play === 'function') {
+                window.player.play();
+              } else if (!window.player.isPlaying && typeof window.player.togglePlay === 'function') {
+                window.player.togglePlay();
               }
-
-              // Immediately update active highlight for instant user feedback
-              const allLines = fsLyricsBody.querySelectorAll('.fs-lyric-line');
-              allLines.forEach((l, i) => {
-                if (i === idx) {
-                  l.classList.add('active');
-                  const container = document.getElementById('fs-lyrics-body');
-                  if (container) {
-                    const containerH = container.clientHeight;
-                    const lineTop = l.offsetTop;
-                    const lineH = l.clientHeight;
-                    container.scrollTo({
-                      top: Math.max(0, lineTop - containerH / 2 + lineH / 2),
-                      behavior: 'smooth'
-                    });
-                  }
-                } else {
-                  l.classList.remove('active');
-                }
-              });
-
-              if (window.player && targetTime >= 0) {
-                window.player.seek(targetTime);
-                if (!window.player.isPlaying) {
-                  window.player.togglePlay();
-                }
-              }
-            });
+            }
           });
-        }
+        });
       }
-    }
+    };
+
+    updateLyricsContainer(fsLyricsBody);
+    updateLyricsContainer(mobileLyricsBody);
   });
 }
 

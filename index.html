@@ -6,13 +6,21 @@
   <title>AYU.music - Premium Music Streaming</title>
    <link rel="icon" type="image/x-icon" href="music.png">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=18">
+  <link rel="stylesheet" href="css/style.css?v=19">
   <link rel="stylesheet" href="css/animations.css?v=5">
-  <link rel="stylesheet" href="css/responsive.css?v=4">
+  <link rel="stylesheet" href="css/responsive.css?v=32">
   
   <!-- CDNs -->
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- SortableJS -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+  <!-- Application Logic Scripts -->
+  <script src="js/data.js?v=17"></script>
+  <script src="js/api.js?v=18"></script>
+  <script src="js/player.js?v=18"></script>
+  <script src="js/app.js?v=47"></script>
   <!-- HLS Streaming supporting m3u8 streams -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
@@ -156,11 +164,15 @@
           <i data-lucide="chevron-down"></i>
         </button>
         <div class="fs-pill-switch">
-          <button class="fs-pill active" id="fs-pill-song">Song</button>
-          <button class="fs-pill" id="fs-pill-video">Video</button>
+          <button class="fs-pill active" id="fs-pill-song" onclick="window.switchPlayerMode('song')">
+            <i data-lucide="music"></i> <span>Song</span>
+          </button>
+          <button class="fs-pill" id="fs-pill-video" onclick="window.switchPlayerMode('video')">
+            <i data-lucide="video"></i> <span>Video</span>
+          </button>
         </div>
         <div class="fs-header-tools">
-          <button id="fs-cast-btn" aria-label="Cast" onclick="window.showCastDevicePicker(event)"><i data-lucide="cast"></i></button>
+          <button id="fs-expand-btn" aria-label="Maximize" onclick="window.toggleFullscreenMode()"><i data-lucide="maximize-2"></i></button>
           <button id="fs-more-btn" aria-label="More" onclick="window.showTrackMenu(event, window.player?.currentTrack?.id)"><i data-lucide="more-vertical"></i></button>
         </div>
       </div>
@@ -168,9 +180,10 @@
       <div class="fs-body">
         <!-- Main Player Column -->
         <div class="fs-left">
-          <!-- 1. Full-Width Square Cover Art -->
-          <div class="fs-art-wrapper">
+          <!-- 1. Full-Width Square Cover Art / Video Viewport -->
+          <div class="fs-art-wrapper" id="fs-art-wrapper" style="position: relative;">
             <img id="fs-art" src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300&auto=format&fit=crop" alt="Artwork" />
+            <div id="fs-video-container" class="fs-video-container" style="display: none; width: 100%; height: 100%; position: absolute; inset: 0; border-radius: 16px; overflow: hidden; background: #000; z-index: 2;"></div>
           </div>
 
           <!-- 2. Left-aligned Title & Artist -->
@@ -208,13 +221,29 @@
             <button id="fs-next-btn" aria-label="Next Song"><i data-lucide="skip-forward"></i></button>
             <button id="fs-repeat-btn" aria-label="Repeat"><i data-lucide="repeat"></i></button>
           </div>
+
+          <!-- Bottom Drag Bar Indicator -->
+          <div class="fs-bottom-bar-indicator"></div>
         </div>
 
-        <!-- Right / Bottom Lyrics View -->
+        <!-- Right / Desktop Lyrics Panel -->
         <div class="fs-right" id="fs-lyrics-panel-view">
           <div class="fs-lyrics-container" id="fs-lyrics-body">
             <p class="fs-lyric-line placeholder">Select a song and view scrolling lyrics.</p>
           </div>
+        </div>
+      </div>
+
+      <!-- Dedicated Mobile Full-Screen Lyrics Overlay Screen (Phone screens only) -->
+      <div class="mobile-lyrics-screen" id="mobile-lyrics-screen">
+        <div class="mobile-lyrics-header">
+          <span class="mobile-lyrics-title">Lyrics</span>
+          <button class="mobile-lyrics-close-btn" id="mobile-lyrics-close-btn" onclick="toggleMobileLyricsView(event)" aria-label="Close Lyrics">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div class="mobile-lyrics-container" id="mobile-lyrics-body">
+          <p class="fs-lyric-line placeholder">Select a song and view scrolling lyrics.</p>
         </div>
       </div>
     </div>
@@ -260,7 +289,7 @@
   <script src="js/library.js?v=19"></script>
   <script src="js/socials.js?v=15"></script>
   <script src="js/profile.js?v=17"></script>
-  <script src="js/app.js?v=32"></script>
+  <script src="js/app.js?v=53"></script>
   <script src="js/interactions.js?v=15"></script>
 
 </body>
