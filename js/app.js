@@ -440,61 +440,65 @@ function bindPlayerEvents() {
     }
   };
 
-  // Universal YouTube Video Integration for All Songs
-  window.getTrackVideoId = function(track) {
-    if (!track) return 'BddP6PYo2gs';
-    
-    if (track.videoId) return track.videoId;
-    if (track.youtubeId) return track.youtubeId;
+  // Official YouTube Video Redirection & Card UI Engine
+  window.getOfficialYouTubeUrl = function(track) {
+    if (!track) return 'https://www.youtube.com/results?search_query=music+video';
 
     const title = (track.title || '').toLowerCase();
 
-    // Map popular songs directly to their official YouTube Music Videos
-    if (title.includes('kesariya')) return 'BddP6PYo2gs';
-    if (title.includes('chaleya')) return 'VAdGW7QDJiU';
-    if (title.includes('apna bana le')) return 'ElZfdU54Cp8';
-    if (title.includes('tum hi ho')) return 'UMb8vfypgUU';
-    if (title.includes('raataan lambiyan')) return 'gvyUuxdRdR4';
-    if (title.includes('heeriye')) return 'RLzC55ai0eo';
-    if (title.includes('makhna')) return '9J9xT6e-M-8';
-    if (title.includes('deva deva')) return 'mNuhKUOD_g0';
-    if (title.includes('pasoori')) return '5Eqb_-j3FDA';
-    if (title.includes('maan meri jaan')) return 'X7v6-XpE8m0';
-    if (title.includes('kahani suno')) return '1-B_N7-1xNo';
-    if (title.includes('samjhawan')) return 'h2j83tWp8B0';
-    if (title.includes('teriyaan')) return '2g811q_Dk-o';
-    if (title.includes('jhoom')) return 'wE4T1kR__hE';
-    if (title.includes('saami saami')) return 'K18A1g4gK-8';
-    if (title.includes('oo antava')) return 'Q1bZ-_1X8v4';
-    if (title.includes('srivalli')) return 'hcMzwUrD8a0';
+    // Direct official video URLs for popular tracks
+    if (title.includes('arz kiya hai')) return 'https://www.youtube.com/watch?v=lZ8xS56vW5c';
+    if (title.includes('kesariya')) return 'https://www.youtube.com/watch?v=BddP6PYo2gs';
+    if (title.includes('chaleya')) return 'https://www.youtube.com/watch?v=VAdGW7QDJiU';
+    if (title.includes('apna bana le')) return 'https://www.youtube.com/watch?v=ElZfdU54Cp8';
+    if (title.includes('tum hi ho')) return 'https://www.youtube.com/watch?v=UMb8vfypgUU';
+    if (title.includes('raataan lambiyan')) return 'https://www.youtube.com/watch?v=gvyUuxdRdR4';
+    if (title.includes('heeriye')) return 'https://www.youtube.com/watch?v=RLzC55ai0eo';
+    if (title.includes('makhna')) return 'https://www.youtube.com/watch?v=9J9xT6e-M-8';
+    if (title.includes('deva deva')) return 'https://www.youtube.com/watch?v=mNuhKUOD_g0';
+    if (title.includes('pasoori')) return 'https://www.youtube.com/watch?v=5Eqb_-j3FDA';
+    if (title.includes('maan meri jaan')) return 'https://www.youtube.com/watch?v=X7v6-XpE8m0';
+    if (title.includes('kahani suno')) return 'https://www.youtube.com/watch?v=1-B_N7-1xNo';
+    if (title.includes('samjhawan')) return 'https://www.youtube.com/watch?v=h2j83tWp8B0';
 
-    return null;
+    return `https://www.youtube.com/results?search_query=${encodeURIComponent(track.title + ' ' + track.artist + ' official music video')}`;
+  };
+
+  window.openOfficialSongVideo = function(event) {
+    if (event) event.stopPropagation();
+    const currentTrack = window.player?.currentTrack;
+    if (!currentTrack) return;
+    const youtubeUrl = window.getOfficialYouTubeUrl(currentTrack);
+    window.open(youtubeUrl, '_blank', 'noopener,noreferrer');
   };
 
   window.loadTrackVideo = function(track) {
     const container = document.getElementById('fs-video-container');
     if (!container || !track) return;
 
-    const videoId = window.getTrackVideoId(track);
-    const origin = window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'https://localhost';
-
-    let embedUrl = '';
-    if (videoId) {
-      embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=1&enablejsapi=1&origin=${encodeURIComponent(origin)}`;
-    } else {
-      const searchQuery = `${track.title} ${track.artist} official video`;
-      embedUrl = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(searchQuery)}&autoplay=1&mute=0&enablejsapi=1&origin=${encodeURIComponent(origin)}`;
-    }
-
     container.innerHTML = `
-      <iframe id="fs-video-iframe" 
-        src="${embedUrl}" 
-        title="${track.title} Music Video"
-        frameborder="0" 
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-        allowfullscreen 
-        style="width: 100%; height: 100%; border: none; border-radius: 16px; object-fit: cover; background: #000;">
-      </iframe>
+      <div class="fs-yt-card" onclick="window.openOfficialSongVideo(event)" style="width: 100%; height: 100%; border-radius: 16px; background: linear-gradient(135deg, #181524 0%, #0d0b14 100%); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 24px; box-sizing: border-box; cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.08); position: relative; overflow: hidden;">
+        
+        <!-- YouTube Logo Header -->
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+          <svg width="32" height="23" viewBox="0 0 32 23" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M31.332 3.555A4.013 4.013 0 0028.504.727C26.01 0 16 0 16 0S5.99 0 3.496.727A4.013 4.013 0 00.668 3.555C0 6.049 0 11.5 0 11.5s0 5.451.668 7.945a4.013 4.013 0 002.828 2.828C5.99 23 16 23 16 23s10.01 0 12.504-.727a4.013 4.013 0 002.828-2.828C32 16.951 32 11.5 32 11.5s0-5.451-.668-7.945z" fill="#FF0000"/>
+            <path d="M12.8 16.429L21.143 11.5 12.8 6.571v9.858z" fill="#FFFFFF"/>
+          </svg>
+          <span style="color: #ffffff; font-size: 20px; font-weight: 800; font-family: 'DM Sans', sans-serif; letter-spacing: -0.5px;">YouTube</span>
+        </div>
+
+        <!-- Heading Text -->
+        <h3 style="color: #ffffff; font-size: 22px; font-weight: 800; margin: 0 0 16px 0; font-family: 'DM Sans', sans-serif; line-height: 1.25;">
+          This video is unavailable
+        </h3>
+
+        <!-- Redirection Button -->
+        <button onclick="window.openOfficialSongVideo(event)" style="background: #ffffff; color: #000000; border: none; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.15s ease;">
+          Watch on YouTube
+        </button>
+
+      </div>
     `;
   };
 
