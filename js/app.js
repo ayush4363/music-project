@@ -1,5 +1,16 @@
 /* AYU.music App Core Orchestrator */
 
+// Register PWA Service Worker safely without interfering with player/audio streams
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      console.log('[PWA] Service Worker registered:', reg.scope);
+    }).catch((err) => {
+      console.warn('[PWA] Service Worker registration failed:', err);
+    });
+  });
+}
+
 let activeMenuTrackId = null;
 let parsedLyrics = [];
 
