@@ -248,6 +248,12 @@ async function renderHome() {
     lucide.createIcons();
   } catch (error) {
     console.error("Error loading home page content:", error);
+    // Fail-safe render to clear skeleton cards
+    renderSuggested([
+      { id: 'fb1', title: 'Kesariya', artist: 'Pritam, Arijit Singh', artwork: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=300&auto=format&fit=crop', audioUrl: '' },
+      { id: 'fb2', title: 'Apna Bana Le', artist: 'Arijit Singh, Sachin-Jigar', artwork: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=300&auto=format&fit=crop', audioUrl: '' }
+    ]);
+    lucide.createIcons();
   }
 }
 

@@ -73,9 +73,14 @@
   animation: scaleIn 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-/* Play state rotation for artwork (CD-like rotation) */
-.rotate-playing {
-  animation: rotateArtwork 20s linear infinite;
+/* Circular Vinyl Rotation for Artwork when playing */
+.rotate-playing,
+#player-art.rotate-playing {
+  border-radius: 50% !important;
+  animation: rotateArtwork 12s linear infinite !important;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.4) !important;
+  z-index: 2;
+  position: relative;
 }
 
 /* Active sound bar animations */

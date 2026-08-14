@@ -205,20 +205,24 @@ const musicStreamingApi = {
 
 const musicApi = {
   getHome: async () => {
+    const safeFetchSongs = (q, limit = 12) => musicStreamingApi.searchSongs(q, 0, limit).catch(() => []);
+    const safeFetchArtists = (q, limit = 8) => musicStreamingApi.searchArtists(q, 0, limit).catch(() => []);
+    const safeFetchPlaylists = (q, limit = 6) => musicStreamingApi.searchPlaylists(q, 0, limit).catch(() => []);
+
     try {
       const [rec, trend, hindi, english, punjabi, artistsRes, playlistsRes] = await Promise.all([
-        musicStreamingApi.searchSongs("chill vibes", 0, 8),
-        musicStreamingApi.searchSongs("trending", 0, 12),
-        musicStreamingApi.searchSongs("Hindi hits", 0, 12),
-        musicStreamingApi.searchSongs("English hits", 0, 12),
-        musicStreamingApi.searchSongs("Punjabi hits", 0, 12),
-        musicStreamingApi.searchArtists("top singers", 0, 8),
-        musicStreamingApi.searchPlaylists("popular hits", 0, 6)
+        safeFetchSongs("chill vibes", 8),
+        safeFetchSongs("trending", 12),
+        safeFetchSongs("Hindi hits", 12),
+        safeFetchSongs("English hits", 12),
+        safeFetchSongs("Punjabi hits", 12),
+        safeFetchArtists("top singers", 8),
+        safeFetchPlaylists("popular hits", 6)
       ]);
 
       const topHits = [...hindi, ...english, ...punjabi];
-      const recommended = rec.length ? rec : topHits.slice(0, 6);
-      const trending = trend.length ? trend : topHits.slice(6, 12);
+      const recommended = rec.length ? rec : (topHits.length ? topHits.slice(0, 8) : []);
+      const trending = trend.length ? trend : (topHits.length ? topHits.slice(4, 12) : []);
       const newReleases = [...hindi.slice(3, 8), ...english.slice(3, 8), ...punjabi.slice(3, 8)];
 
       const firstPlaylist = playlistsRes?.[0] || { title: 'Bollywood Hits', description: 'Trending Indian and global sounds.', image: '' };
@@ -226,7 +230,7 @@ const musicApi = {
         label: 'TRENDING PLAYLIST',
         title: firstPlaylist.title,
         description: firstPlaylist.description || 'The biggest new sounds, all in one place.',
-        image: firstPlaylist.image || (topHits[0]?.artwork) || '',
+        image: firstPlaylist.image || (topHits[0]?.artwork) || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop',
       };
 
       return {
@@ -240,12 +244,18 @@ const musicApi = {
       };
     } catch (e) {
       console.error('getHome error', e);
+      // Fail-safe fallback data so page always renders content
+      const fallbackSongs = [
+        { id: 'fb1', title: 'Kesariya', artist: 'Pritam, Arijit Singh', artwork: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=300&auto=format&fit=crop', audioUrl: '' },
+        { id: 'fb2', title: 'Apna Bana Le', artist: 'Arijit Singh, Sachin-Jigar', artwork: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=300&auto=format&fit=crop', audioUrl: '' },
+        { id: 'fb3', title: 'Tum Hi Ho', artist: 'Arijit Singh, Mithoon', artwork: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=300&auto=format&fit=crop', audioUrl: '' }
+      ];
       return {
-        hero: { label: '', title: '', description: '', image: '' },
-        recommended: [],
-        trending: [],
-        topHits: [],
-        newReleases: [],
+        hero: { label: 'TRENDING MUSIC', title: 'Top Hits', description: 'Listen to the biggest hits.', image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop' },
+        recommended: fallbackSongs,
+        trending: fallbackSongs,
+        topHits: fallbackSongs,
+        newReleases: fallbackSongs,
         artists: [],
         playlists: [],
       };
@@ -303,20 +313,69 @@ const musicApi = {
   },
 
   getLyrics: async (song) => {
+    const duration = typeof song.duration === 'string' 
+      ? song.duration.split(':').reduce((acc, time) => (60 * acc) + parseInt(time, 10), 0)
+      : typeof song.duration === 'number' ? song.duration : undefined;
+
+    const cleanTitle = (song.title || '')
+      .replace(/\s*[\(\[\{].*?[\)\]\}]/g, '')
+      .replace(/\s*-\s*.*$/, '')
+      .trim();
+
+    const artistsList = (song.artist || '')
+      .split(/[,&]/)
+      .map(s => s.replace(/\s*-\s*.*$/, '').trim())
+      .filter(Boolean);
+
+    const mainArtist = artistsList[0] || '';
+    const secondArtist = artistsList[1] || '';
+
+    // 1. Try search LRCLIB with cleanTitle first for guaranteed synced lyrics
+    try {
+      const searchRes = await lrclibRequest('/search', { q: cleanTitle });
+      if (Array.isArray(searchRes) && searchRes.length > 0) {
+        const syncedMatch = searchRes.find(item => item.syncedLyrics && item.syncedLyrics.trim().length > 50);
+        if (syncedMatch) return syncedMatch;
+      }
+    } catch {}
+
+    // 2. Try search LRCLIB with title + artist
+    try {
+      const searchRes = await lrclibRequest('/search', { q: `${cleanTitle} ${mainArtist}`.trim() });
+      if (Array.isArray(searchRes) && searchRes.length > 0) {
+        const syncedMatch = searchRes.find(item => item.syncedLyrics && item.syncedLyrics.trim().length > 50);
+        if (syncedMatch) return syncedMatch;
+      }
+    } catch {}
+
+    // 3. Try exact /get variants
+    const queryVariants = [
+      { track_name: cleanTitle, artist_name: mainArtist },
+      { track_name: cleanTitle, artist_name: secondArtist },
+      { track_name: cleanTitle }
+    ];
+
+    for (const params of queryVariants) {
+      if (!params.track_name) continue;
+      try {
+        const query = { ...params };
+        if (duration) query.duration = duration;
+        const res = await lrclibRequest('/get', query);
+        if (res && (res.syncedLyrics || res.plainLyrics)) {
+          return res;
+        }
+      } catch {}
+    }
+
+    // 4. Fallback to Saavn plain lyrics
     if (song.id) {
-      const lyrics = await musicStreamingApi.getLyrics(song.id);
+      const lyrics = await musicStreamingApi.getLyrics(song.id).catch(() => null);
       if (lyrics) {
         return { plainLyrics: lyrics };
       }
     }
-    const duration = typeof song.duration === 'string' 
-      ? song.duration.split(':').reduce((acc, time) => (60 * acc) + parseInt(time), 0)
-      : typeof song.duration === 'number' ? song.duration : undefined;
-    try {
-      return await lrclibRequest('/get', { track_name: song.title, artist_name: song.artist, album_name: song.album, duration });
-    } catch {
-      return null;
-    }
+
+    return null;
   },
 };
 

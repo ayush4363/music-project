@@ -21,45 +21,88 @@ function getArtworkGradient(track) {
   return gradients[val % gradients.length];
 }
 
-// Parses IRC lyrics synced timestamps [mm:ss.xx]
+// Parses LRC lyrics synced timestamps [mm:ss], [mm:ss.xx], [mm:ss:xx]
 function parseLyrics(lyricText) {
   if (!lyricText) return [];
   const lines = lyricText.split('\n');
-  const pattern = /^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
   const result = [];
+  const timeRegex = /\[(\d{1,2}):(\d{2})(?:[\.\:](\d{2,3}))?\]/g;
   
-  for (const line of lines) {
-    const match = pattern.exec(line.trim());
-    if (match) {
-      const mins = parseInt(match[1]);
-      const secs = parseInt(match[2]);
-      const msStr = match[3];
-      const ms = parseInt(msStr);
-      // Determine fraction divisor (2 digits -> /100, 3 digits -> /1000)
-      const time = mins * 60 + secs + (ms / (msStr.length === 2 ? 100 : 1000));
-      const text = match[4].trim();
-      result.push({ time, text });
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+
+    timeRegex.lastIndex = 0;
+    const timeMatches = [...trimmed.matchAll(timeRegex)];
+
+    if (timeMatches.length > 0) {
+      const text = trimmed.replace(timeRegex, '').trim();
+      if (text) {
+        for (const match of timeMatches) {
+          const mins = parseInt(match[1], 10);
+          const secs = parseInt(match[2], 10);
+          const msStr = match[3] || '0';
+          const ms = parseInt(msStr, 10);
+          const fraction = ms / (msStr.length === 3 ? 1000 : 100);
+          const time = mins * 60 + secs + fraction;
+          result.push({ time, text });
+        }
+      }
     } else {
-      if (line.trim()) {
-        result.push({ time: -1, text: line.trim() });
+      if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) {
+        result.push({ time: -1, text: trimmed });
       }
     }
   }
+
+  result.sort((a, b) => {
+    if (a.time === -1 && b.time === -1) return 0;
+    if (a.time === -1) return 1;
+    if (b.time === -1) return -1;
+    return a.time - b.time;
+  });
+
   return result;
 }
 
-// Syncs scrolling position and active highlights tocurrentTime
+function getLyricTimeForIndex(idx, total, duration) {
+  if (total <= 0) return 0;
+  const startDelay = 10;
+  const endDelay = 10;
+  const singingDuration = Math.max(10, duration - startDelay - endDelay);
+  return startDelay + (idx / total) * singingDuration;
+}
+
+function getLyricIndexForTime(currentTime, duration, total) {
+  if (total <= 0) return -1;
+  const startDelay = 10;
+  const endDelay = 10;
+  const singingDuration = Math.max(10, duration - startDelay - endDelay);
+  const elapsed = Math.max(0, currentTime - startDelay);
+  const progressPct = Math.min(0.99, elapsed / singingDuration);
+  return Math.floor(progressPct * total);
+}
+
+// Syncs scrolling position and active highlights to currentTime
 function updateFullscreenLyrics(currentTime) {
-  if (parsedLyrics.length === 0) return;
+  if (!parsedLyrics || parsedLyrics.length === 0) return;
+  
+  const hasTimestamps = parsedLyrics.some(item => item.time !== -1);
+  const duration = window.player?.duration || 240;
   
   let activeIndex = -1;
-  for (let i = 0; i < parsedLyrics.length; i++) {
-    if (parsedLyrics[i].time !== -1 && currentTime >= parsedLyrics[i].time) {
-      activeIndex = i;
+  
+  if (hasTimestamps) {
+    for (let i = 0; i < parsedLyrics.length; i++) {
+      if (parsedLyrics[i].time !== -1 && currentTime >= parsedLyrics[i].time) {
+        activeIndex = i;
+      }
     }
+  } else {
+    activeIndex = getLyricIndexForTime(currentTime, duration, parsedLyrics.length);
   }
   
-  if (activeIndex !== -1) {
+  if (activeIndex >= 0 && activeIndex < parsedLyrics.length) {
     const linesEl = document.querySelectorAll('.fs-lyric-line');
     linesEl.forEach((line, idx) => {
       if (idx === activeIndex) {
@@ -70,7 +113,10 @@ function updateFullscreenLyrics(currentTime) {
             const containerH = container.clientHeight;
             const lineTop = line.offsetTop;
             const lineH = line.clientHeight;
-            container.scrollTop = lineTop - containerH / 2 + lineH / 2;
+            container.scrollTo({
+              top: Math.max(0, lineTop - containerH / 2 + lineH / 2),
+              behavior: 'smooth'
+            });
           }
         }
       } else {
@@ -108,6 +154,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+  // Initialize 360-degree Circular Equalizer Spectrum Visualizer
+  initCircularVisualizer();
+
   // Mobile menu drawers
   initMobileDrawer();
 
@@ -129,6 +178,17 @@ function bindPlayerEvents() {
   const volumeSlider = document.getElementById('player-volume-slider');
   const currentTimeLabel = document.getElementById('player-current-time');
   const totalTimeLabel = document.getElementById('player-total-time');
+
+  // Initialize initial white slider fills
+  if (volumeSlider && p) {
+    const vol = p.volume !== undefined ? p.volume : 0.8;
+    const pct = vol * 100;
+    volumeSlider.value = Math.floor(pct);
+    volumeSlider.style.background = `linear-gradient(to right, #ffffff ${pct}%, rgba(255, 255, 255, 0.2) ${pct}%)`;
+  }
+  if (progressSlider) {
+    progressSlider.style.background = `linear-gradient(to right, #ffffff 0%, rgba(255, 255, 255, 0.2) 0%)`;
+  }
   
   const lyricsToggle = document.getElementById('player-lyrics-toggle');
   const lyricsPanel = document.getElementById('lyrics-panel');
@@ -434,26 +494,42 @@ function bindPlayerEvents() {
             <p class="fs-lyric-line" data-index="${idx}" data-time="${line.time}">${line.text}</p>
           `).join('');
 
-          // Bind clicks dynamically with fallback estimated seek times
+          // Bind clicks dynamically with unified seek time calculations
           fsLyricsBody.querySelectorAll('.fs-lyric-line').forEach(el => {
             el.addEventListener('click', () => {
+              const idx = parseInt(el.getAttribute('data-index'), 10);
               const time = parseFloat(el.getAttribute('data-time'));
-              if (time !== -1 && window.player) {
-                window.player.seek(time);
+              const duration = window.player?.duration || 240;
+
+              let targetTime = time;
+              if (targetTime === -1) {
+                targetTime = getLyricTimeForIndex(idx, parsedLyrics.length, duration);
+              }
+
+              // Immediately update active highlight for instant user feedback
+              const allLines = fsLyricsBody.querySelectorAll('.fs-lyric-line');
+              allLines.forEach((l, i) => {
+                if (i === idx) {
+                  l.classList.add('active');
+                  const container = document.getElementById('fs-lyrics-body');
+                  if (container) {
+                    const containerH = container.clientHeight;
+                    const lineTop = l.offsetTop;
+                    const lineH = l.clientHeight;
+                    container.scrollTo({
+                      top: Math.max(0, lineTop - containerH / 2 + lineH / 2),
+                      behavior: 'smooth'
+                    });
+                  }
+                } else {
+                  l.classList.remove('active');
+                }
+              });
+
+              if (window.player && targetTime >= 0) {
+                window.player.seek(targetTime);
                 if (!window.player.isPlaying) {
                   window.player.togglePlay();
-                }
-              } else {
-                // Estimated time fallback for non-synced plain lyrics
-                const idx = parseInt(el.getAttribute('data-index'));
-                const duration = window.player.duration || 0;
-                const total = parsedLyrics.length;
-                if (duration > 0 && total > 0) {
-                  const estTime = (idx / total) * duration;
-                  window.player.seek(estTime);
-                  if (!window.player.isPlaying) {
-                    window.player.togglePlay();
-                  }
                 }
               }
             });
@@ -722,4 +798,95 @@ function initMobileDrawer() {
   });
 
   lucide.createIcons();
+}
+
+/* 360-Degree Circular Audio Equalizer Spectrum Generator */
+function initCircularVisualizer() {
+  const svg = document.getElementById('circular-visualizer-svg');
+  if (!svg) return;
+
+  const numBars = 80;
+  const cx = 70;
+  const cy = 70;
+  const rMin = 32; // Base inner radius surrounding 56px circular artwork
+
+  let barsHTML = '';
+  // Generate SVG line elements and dotted tips in 360 degrees
+  for (let i = 0; i < numBars; i++) {
+    const angle = (i / numBars) * 2 * Math.PI;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    const x1 = cx + rMin * cos;
+    const y1 = cy + rMin * sin;
+    const x2 = cx + (rMin + 6) * cos;
+    const y2 = cy + (rMin + 6) * sin;
+
+    barsHTML += `<line id="viz-bar-${i}" x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" opacity="0.9" />`;
+    
+    // Alternating flying tip dots (matching the exact reference image)
+    if (i % 3 === 0) {
+      barsHTML += `<circle id="viz-dot-${i}" cx="${(cx + (rMin + 10) * cos).toFixed(2)}" cy="${(cy + (rMin + 10) * sin).toFixed(2)}" r="0.75" fill="#ffffff" opacity="0.9" />`;
+    }
+  }
+  svg.innerHTML = barsHTML;
+
+  let animFrameId = null;
+  let phase = 0;
+
+  function animateVisualizer() {
+    if (!window.player || !window.player.isPlaying) {
+      svg.style.opacity = '0';
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+      return;
+    }
+
+    svg.style.opacity = '1';
+    phase += 0.08;
+
+    for (let i = 0; i < numBars; i++) {
+      const lineEl = document.getElementById(`viz-bar-${i}`);
+      const dotEl = document.getElementById(`viz-dot-${i}`);
+      if (!lineEl) continue;
+
+      const angle = (i / numBars) * 2 * Math.PI;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+
+      // Organic audio frequency spectrum heights matching reference image peaks
+      const baseHeight = 3 + Math.sin(i * 0.35 + phase) * 5 + Math.cos(i * 0.65 - phase * 0.6) * 7 + (Math.random() * 4);
+      const h = Math.max(2, Math.min(22, baseHeight));
+
+      const x1 = cx + rMin * cos;
+      const y1 = cy + rMin * sin;
+      const x2 = cx + (rMin + h) * cos;
+      const y2 = cy + (rMin + h) * sin;
+
+      lineEl.setAttribute('x2', x2.toFixed(2));
+      lineEl.setAttribute('y2', y2.toFixed(2));
+      lineEl.setAttribute('opacity', (0.5 + (h / 22) * 0.5).toFixed(2));
+
+      if (dotEl) {
+        const dotR = rMin + h + 3 + (Math.sin(phase * 1.5 + i) * 1.5);
+        dotEl.setAttribute('cx', (cx + dotR * cos).toFixed(2));
+        dotEl.setAttribute('cy', (cy + dotR * sin).toFixed(2));
+        dotEl.setAttribute('opacity', (0.4 + (h / 22) * 0.6).toFixed(2));
+      }
+    }
+
+    animFrameId = requestAnimationFrame(animateVisualizer);
+  }
+
+  window.player.on('play-state-change', (isPlaying) => {
+    if (isPlaying) {
+      animateVisualizer();
+    } else {
+      svg.style.opacity = '0';
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+    }
+  });
+
+  if (window.player && window.player.isPlaying) {
+    animateVisualizer();
+  }
 }
