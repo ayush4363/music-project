@@ -10,7 +10,7 @@ const isLocalhost = window.location.hostname === 'localhost' ||
 
 const CORS_PROXY = isLocalhost 
   ? 'https://corsproxy.io/?' 
-  : '/saavn-api';
+  : 'https://proxy.cors.sh/';
 
 const JIOSAAVN_BASE = 'https://www.jiosaavn.com/api.php';
 const LRCLIB_BASE   = 'https://lrclib.net/api';
@@ -56,10 +56,7 @@ async function saavnFetch(callName, extraParams = {}) {
     if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
   });
 
-  // Build final URL depending on proxy strategy
-  const finalUrl = isLocalhost 
-    ? `${CORS_PROXY}${JIOSAAVN_BASE}?${params.toString()}` 
-    : `${CORS_PROXY}?${params.toString()}`;
+  const finalUrl = `${CORS_PROXY}${JIOSAAVN_BASE}?${params.toString()}`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12000);
