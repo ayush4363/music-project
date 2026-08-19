@@ -360,20 +360,72 @@ function renderHindiHits(tracks) {
   row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
 }
 
+const hindiHitsFallbacks = [
+  { id: 'fb-kesariya', title: 'Kesariya', artist: 'Pritam, Arijit Singh, Amitabh Bhattacharya', artwork: 'https://c.saavncdn.com/191/Kesariya-From-Brahmastra-Hindi-2022-20220717092820-500x500.jpg', album: 'Brahmastra', duration: '4:28' },
+  { id: 'fb-apnabanale', title: 'Apna Bana Le', artist: 'Arijit Singh, Sachin-Jigar', artwork: 'https://c.saavncdn.com/816/Apna-Bana-Le-From-Bhediya-Hindi-2022-20221105193910-500x500.jpg', album: 'Bhediya', duration: '4:21' },
+  { id: 'fb-chaleya', title: 'Chaleya', artist: 'Anirudh Ravichander, Arijit Singh', artwork: 'https://c.saavncdn.com/022/Chaleya-From-Jawan-Hindi-2023-20230814114321-500x500.jpg', album: 'Jawan', duration: '3:08' },
+  { id: 'fb-devadeva', title: 'Deva Deva', artist: 'Pritam, Arijit Singh, Jonita Gandhi', artwork: 'https://c.saavncdn.com/191/Kesariya-From-Brahmastra-Hindi-2022-20220717092820-500x500.jpg', album: 'Brahmastra', duration: '4:39' },
+  { id: 'fb-heeriye', title: 'Heeriye', artist: 'Jasleen Royal, Arijit Singh', artwork: 'https://c.saavncdn.com/044/Heeriye-feat-Arijit-Singh-Hindi-2023-20230725062627-500x500.jpg', album: 'Heeriye', duration: '3:14' },
+  { id: 'fb-maanmerijaan', title: 'Maan Meri Jaan', artist: 'King', artwork: 'https://c.saavncdn.com/734/Champagne-Talk-Hindi-2022-20221012061214-500x500.jpg', album: 'Champagne Talk', duration: '3:14' }
+];
+
+const classicsFallbacks = [
+  { id: 'fb-tumhiho', title: 'Tum Hi Ho', artist: 'Arijit Singh, Mithoon', artwork: 'https://c.saavncdn.com/902/Aashiqui-2-Hindi-2013-500x500.jpg', album: 'Aashiqui 2', duration: '4:22' },
+  { id: 'fb-tujhedekha', title: 'Tujhe Dekha To Yeh Jaana Sanam', artist: 'Kumar Sanu, Lata Mangeshkar', artwork: 'https://c.saavncdn.com/129/Dilwale-Dulhania-Le-Jayenge-Hindi-1995-20200813134005-500x500.jpg', album: 'DDLJ', duration: '5:02' },
+  { id: 'fb-churakedilmera', title: 'Chura Ke Dil Mera', artist: 'Kumar Sanu, Alka Yagnik', artwork: 'https://c.saavncdn.com/985/Main-Khiladi-Tu-Anari-Hindi-1994-20220917173256-500x500.jpg', album: 'Main Khiladi Tu Anari', duration: '5:49' },
+  { id: 'fb-kalhonaaho', title: 'Kal Ho Naa Ho', artist: 'Sonu Nigam, Shankar-Ehsaan-Loy', artwork: 'https://c.saavncdn.com/264/Kal-Ho-Naa-Ho-Hindi-2003-20221021200115-500x500.jpg', album: 'Kal Ho Naa Ho', duration: '5:21' },
+  { id: 'fb-lagjagale', title: 'Lag Ja Gale Ke Phir', artist: 'Lata Mangeshkar, Madan Mohan', artwork: 'https://c.saavncdn.com/530/Woh-Kaun-Thi-Hindi-1964-20190603134300-500x500.jpg', album: 'Woh Kaun Thi', duration: '4:17' },
+  { id: 'fb-tujhmeinrab', title: 'Tujh Mein Rab Dikhta Hai', artist: 'Roopkumar Rathod, Salim-Sulaiman', artwork: 'https://c.saavncdn.com/231/Rab-Ne-Bana-Di-Jodi-Hindi-2008-20221122174312-500x500.jpg', album: 'Rab Ne Bana Di Jodi', duration: '4:44' }
+];
+
+const trendingFallbacks = [
+  { id: 'fb-pasoori', title: 'Pasoori', artist: 'Ali Sethi, Shae Gill', artwork: 'https://c.saavncdn.com/259/Pasoori-Punjabi-2022-20220203181822-500x500.jpg', album: 'Pasoori', duration: '3:44' },
+  { id: 'fb-makhna', title: 'Makhna', artist: 'Tanishk Bagchi, Yasser Desai', artwork: 'https://c.saavncdn.com/007/Drive-Hindi-2019-20191101075001-500x500.jpg', album: 'Drive', duration: '3:03' },
+  { id: 'fb-kahanisuno', title: 'Kahani Suno 2.0', artist: 'Kaifi Khalil', artwork: 'https://c.saavncdn.com/327/Kahani-Suno-2-0-Urdu-2022-20220614163901-500x500.jpg', album: 'Kahani Suno', duration: '2:53' },
+  { id: 'fb-miamor', title: 'Mi Amor', artist: 'Sharn, 4B', artwork: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=300&auto=format&fit=crop', album: 'Single', duration: '3:12' },
+  { id: 'fb-shapeofyou', title: 'Shape of You', artist: 'Ed Sheeran', artwork: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=300&auto=format&fit=crop', album: 'Divide', duration: '3:53' },
+  { id: 'fb-blindinglights', title: 'Blinding Lights', artist: 'The Weeknd', artwork: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=300&auto=format&fit=crop', album: 'After Hours', duration: '3:20' }
+];
+
+const arijitFallbacks = [
+  { id: 'fb-kesariya', title: 'Kesariya', artist: 'Pritam, Arijit Singh, Amitabh Bhattacharya', artwork: 'https://c.saavncdn.com/191/Kesariya-From-Brahmastra-Hindi-2022-20220717092820-500x500.jpg', album: 'Brahmastra', duration: '4:28' },
+  { id: 'fb-apnabanale', title: 'Apna Bana Le', artist: 'Arijit Singh, Sachin-Jigar', artwork: 'https://c.saavncdn.com/816/Apna-Bana-Le-From-Bhediya-Hindi-2022-20221105193910-500x500.jpg', album: 'Bhediya', duration: '4:21' },
+  { id: 'fb-tumhiho', title: 'Tum Hi Ho', artist: 'Arijit Singh, Mithoon', artwork: 'https://c.saavncdn.com/902/Aashiqui-2-Hindi-2013-500x500.jpg', album: 'Aashiqui 2', duration: '4:22' },
+  { id: 'fb-chaleya', title: 'Chaleya', artist: 'Anirudh Ravichander, Arijit Singh', artwork: 'https://c.saavncdn.com/022/Chaleya-From-Jawan-Hindi-2023-20230814114321-500x500.jpg', album: 'Jawan', duration: '3:08' },
+  { id: 'fb-heeriye', title: 'Heeriye', artist: 'Jasleen Royal, Arijit Singh', artwork: 'https://c.saavncdn.com/044/Heeriye-feat-Arijit-Singh-Hindi-2023-20230725062627-500x500.jpg', album: 'Heeriye', duration: '3:14' },
+  { id: 'fb-shayad', title: 'Shayad', artist: 'Pritam, Arijit Singh', artwork: 'https://c.saavncdn.com/262/Love-Aaj-Kal-Hindi-2020-20200214152504-500x500.jpg', album: 'Love Aaj Kal', duration: '4:07' }
+];
+
+const shreyaFallbacks = [
+  { id: 'fb-deewanimastani', title: 'Deewani Mastani', artist: 'Shreya Ghoshal, Sanjay Leela Bhansali', artwork: 'https://c.saavncdn.com/070/Bajirao-Mastani-Hindi-2015-20221213031021-500x500.jpg', album: 'Bajirao Mastani', duration: '5:40' },
+  { id: 'fb-teriore', title: 'Teri Ore', artist: 'Pritam, Shreya Ghoshal, Rahat Fateh Ali Khan', artwork: 'https://c.saavncdn.com/131/Singh-Is-Kinng-Hindi-2008-20221122143003-500x500.jpg', album: 'Singh Is Kinng', duration: '5:39' },
+  { id: 'fb-ghoomar', title: 'Ghoomar', artist: 'Shreya Ghoshal, Swaroop Khan', artwork: 'https://c.saavncdn.com/712/Padmaavat-Hindi-2018-20180125164923-500x500.jpg', album: 'Padmaavat', duration: '4:42' },
+  { id: 'fb-manwalaage', title: 'Manwa Laage', artist: 'Shreya Ghoshal, Arijit Singh, Vishal-Shekhar', artwork: 'https://c.saavncdn.com/830/Happy-New-Year-Hindi-2014-20221122041235-500x500.jpg', album: 'Happy New Year', duration: '4:31' },
+  { id: 'fb-saans', title: 'Saans', artist: 'Shreya Ghoshal, Mohit Chauhan, A.R. Rahman', artwork: 'https://c.saavncdn.com/791/Jab-Tak-Hai-Jaan-Hindi-2012-20221208031034-500x500.jpg', album: 'Jab Tak Hai Jaan', duration: '5:28' }
+];
+
+const jubinFallbacks = [
+  { id: 'fb-raataanlambiyan', title: 'Raataan Lambiyan', artist: 'Tanishk Bagchi, Jubin Nautiyal, Asees Kaur', artwork: 'https://c.saavncdn.com/238/Shershaah-Hindi-2021-20210815124617-500x500.jpg', album: 'Shershaah', duration: '3:50' },
+  { id: 'fb-tumhiaana', title: 'Tum Hi Aana', artist: 'Payal Dev, Jubin Nautiyal', artwork: 'https://c.saavncdn.com/620/Marjaavaan-Hindi-2019-20200814120300-500x500.jpg', album: 'Marjaavaan', duration: '4:09' },
+  { id: 'fb-lutgaye', title: 'Lut Gaye', artist: 'Tanishk Bagchi, Jubin Nautiyal', artwork: 'https://c.saavncdn.com/279/Lut-Gaye-Hindi-2021-20210217150148-500x500.jpg', album: 'Lut Gaye', duration: '3:48' },
+  { id: 'fb-humnavamere', title: 'Humnava Mere', artist: 'Rocky-Shiv, Jubin Nautiyal', artwork: 'https://c.saavncdn.com/023/Humnava-Mere-Hindi-2018-20180523-500x500.jpg', album: 'Humnava Mere', duration: '4:43' },
+  { id: 'fb-kinnasona', title: 'Kinna Sona', artist: 'Meet Bros, Jubin Nautiyal', artwork: 'https://c.saavncdn.com/620/Marjaavaan-Hindi-2019-20200814120300-500x500.jpg', album: 'Marjaavaan', duration: '4:33' }
+];
+
 async function loadBollywoodClassics() {
   const row = document.getElementById('classics-row');
   if (!row) return;
 
   try {
     const tracks = await window.musicStreamingApi.searchSongs("Bollywood Classics", 0, 12);
-    if (tracks.length) {
-      window.homeClassics = tracks;
-      row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
-      lucide.createIcons();
-    }
+    const finalTracks = tracks.length ? tracks : classicsFallbacks;
+    window.homeClassics = finalTracks;
+    row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
   } catch (err) {
     console.error("Error loading classics:", err);
+    row.innerHTML = classicsFallbacks.map(track => createSongCardHTML(track, classicsFallbacks)).join('');
   }
+  lucide.createIcons();
 }
 
 async function loadTrendingSongs() {
@@ -382,13 +434,13 @@ async function loadTrendingSongs() {
 
   try {
     const tracks = await window.musicStreamingApi.searchSongs("trending", 0, 12);
-    if (tracks.length) {
-      row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
-      lucide.createIcons();
-    }
+    const finalTracks = tracks.length ? tracks : trendingFallbacks;
+    row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
   } catch (err) {
     console.error("Error loading trending songs:", err);
+    row.innerHTML = trendingFallbacks.map(track => createSongCardHTML(track, trendingFallbacks)).join('');
   }
+  lucide.createIcons();
 }
 
 async function loadArijitSongs() {
@@ -397,13 +449,13 @@ async function loadArijitSongs() {
 
   try {
     const tracks = await window.musicStreamingApi.searchSongs("Arijit Singh", 0, 12);
-    if (tracks.length) {
-      row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
-      lucide.createIcons();
-    }
+    const finalTracks = tracks.length ? tracks : arijitFallbacks;
+    row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
   } catch (err) {
     console.error("Error loading Arijit songs:", err);
+    row.innerHTML = arijitFallbacks.map(track => createSongCardHTML(track, arijitFallbacks)).join('');
   }
+  lucide.createIcons();
 }
 
 async function loadShreyaSongs() {
@@ -412,13 +464,13 @@ async function loadShreyaSongs() {
 
   try {
     const tracks = await window.musicStreamingApi.searchSongs("Shreya Ghoshal", 0, 12);
-    if (tracks.length) {
-      row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
-      lucide.createIcons();
-    }
+    const finalTracks = tracks.length ? tracks : shreyaFallbacks;
+    row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
   } catch (err) {
     console.error("Error loading Shreya songs:", err);
+    row.innerHTML = shreyaFallbacks.map(track => createSongCardHTML(track, shreyaFallbacks)).join('');
   }
+  lucide.createIcons();
 }
 
 async function loadJubinSongs() {
@@ -427,19 +479,27 @@ async function loadJubinSongs() {
 
   try {
     const tracks = await window.musicStreamingApi.searchSongs("Jubin Nautiyal", 0, 12);
-    if (tracks.length) {
-      row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
-      lucide.createIcons();
-    }
+    const finalTracks = tracks.length ? tracks : jubinFallbacks;
+    row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
   } catch (err) {
     console.error("Error loading Jubin songs:", err);
+    row.innerHTML = jubinFallbacks.map(track => createSongCardHTML(track, jubinFallbacks)).join('');
   }
+  lucide.createIcons();
+}
+
+function renderHindiHits(tracks) {
+  const row = document.getElementById('hindi-hits-row');
+  if (!row) return;
+  const finalTracks = tracks && tracks.length ? tracks : hindiHitsFallbacks;
+  row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
 }
 
 function renderEnglishHits(tracks) {
   const row = document.getElementById('english-row');
   if (!row) return;
-  row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
+  const finalTracks = tracks && tracks.length ? tracks : trendingFallbacks;
+  row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
 }
 
 function renderArtists(artists) {
