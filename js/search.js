@@ -130,6 +130,12 @@ async function executeSearch(query) {
 
   try {
     const data = await window.musicApi.search(query);
+    
+    // Save to global caches for instant playback on tap
+    window._songCache = window._songCache || {};
+    window._lastSearchResults = data.songs || [];
+    window._lastSearchResults.forEach(s => { if (s?.id) window._songCache[s.id] = s; });
+
     renderSearchResults(data);
   } catch (error) {
     console.error("Search API error:", error);
@@ -284,17 +290,18 @@ window.quickSearch = (val) => {
 
 window.playSearchResultSong = async (trackId) => {
   try {
-    const track = await window.musicStreamingApi.getSongById(trackId);
-    if (track) {
-      // Find suggestion songs in results to set queue
-      const searchVal = document.getElementById('search-input')?.value.trim();
-      let queue = [track];
-      if (searchVal) {
-        const results = await window.musicApi.search(searchVal);
-        if (results.songs && results.songs.length) queue = results.songs;
-      }
-      window.player.playTrack(track, queue);
+    // Look up track from cache first (guarantees instant load and has audioUrl)
+    let track = window._songCache?.[trackId];
+
+    // Fallback only if missing
+    if (!track || !track.audioUrl) {
+      track = await window.musicStreamingApi.getSongById(trackId);
     }
+    if (!track) { console.warn("playSearchResultSong: track not found", trackId); return; }
+
+    // Use search result songs as queue (avoids repeating search query)
+    const queue = window._lastSearchResults?.length ? window._lastSearchResults : [track];
+    window.player.playTrack(track, queue);
   } catch (error) {
     console.error("Error playing search result song:", error);
   }

@@ -49,11 +49,37 @@
     --player-height: 80px;
   }
   
+  /* Horizontal 4-row grid scroll for Suggestions on Mobile (Quick picks style) */
+  .suggestions-grid {
+    display: grid !important;
+    grid-template-rows: repeat(4, auto) !important;
+    grid-template-columns: none !important;
+    grid-auto-flow: column !important;
+    grid-auto-columns: 85% !important;
+    gap: 12px 16px !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    padding: 4px 16px 16px 4px !important;
+    margin: 0 -16px !important;
+    scrollbar-width: none !important;
+  }
+  .suggestions-grid::-webkit-scrollbar {
+    display: none !important;
+  }
+  .suggestion-item {
+    scroll-snap-align: start !important;
+    width: 100% !important;
+  }
+  
   .sidebar {
     transform: translateX(-100%);
     width: 180px !important; /* Force width for drawer */
     box-shadow: 15px 0 40px rgba(0,0,0,0.8);
     transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    background-color: rgba(10, 10, 12, 0.96) !important;
+    backdrop-filter: blur(25px) !important;
+    -webkit-backdrop-filter: blur(25px) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
   }
   
   .sidebar.mobile-open {
@@ -577,3 +603,44 @@
     font-size: 18px !important;
   }
 }
+
+/* Responsive Show More Modal Content (Android/Mobile Vertical Scrolling Fix) */
+@media (max-width: 1024px) {
+  .show-more-modal {
+    padding: 48px 32px;
+  }
+  .show-more-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 20px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .show-more-modal {
+    padding: 32px 20px;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+  .show-more-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 16px !important;
+  }
+  .show-more-title {
+    font-size: 24px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .show-more-modal {
+    padding: 24px 16px;
+  }
+  .show-more-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+  .show-more-title {
+    font-size: 20px !important;
+  }
+}
+

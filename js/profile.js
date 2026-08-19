@@ -1,6 +1,6 @@
 /* Profile Page Renderer */
 
-function renderProfile() {
+async function renderProfile() {
   const container = document.getElementById('main-viewport');
   if (!container) return;
 
@@ -40,8 +40,53 @@ function renderProfile() {
     .map(name => ({
       name: name,
       count: artistCounts[name],
-      artwork: artistArtworks[name] || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=150&auto=format&fit=crop'
+      artwork: window.getArtistRealImage(name, artistArtworks[name])
     }));
+
+  // Load explicitly followed/liked artists and merge them
+  let followedArtists = [];
+  try {
+    followedArtists = JSON.parse(localStorage.getItem('liked_artists')) || [];
+  } catch {
+    followedArtists = [];
+  }
+
+  followedArtists.forEach(fa => {
+    const exists = topArtists.find(a => a.name.toLowerCase() === fa.name.toLowerCase());
+    if (!exists) {
+      topArtists.unshift({
+        name: fa.name,
+        count: 1,
+        artwork: window.getArtistRealImage(fa.name, fa.image)
+      });
+    } else {
+      // Ensure followed artists use their real image if cached/mapped
+      exists.artwork = window.getArtistRealImage(fa.name, fa.image || exists.artwork);
+    }
+  });
+
+  // Resolve real images for top 5 artists from Saavn API dynamically
+  const top5 = topArtists.slice(0, 5);
+  await Promise.all(top5.map(async (artist) => {
+    try {
+      let realImg = window.getArtistRealImage(artist.name, null);
+      if (!realImg || realImg.includes('unsplash.com')) {
+        const searchResults = await window.musicStreamingApi.searchArtists(artist.name, 0, 1);
+        if (searchResults && searchResults.length && searchResults[0].image) {
+          realImg = searchResults[0].image;
+          // Cache it for detail view loading
+          window._artistCache = window._artistCache || {};
+          window._artistCache[searchResults[0].id] = searchResults[0];
+          window._artistCache[artist.name.toLowerCase()] = searchResults[0];
+        }
+      }
+      if (realImg) {
+        artist.artwork = realImg;
+      }
+    } catch (e) {
+      console.error("Error resolving profile artist image:", e);
+    }
+  }));
 
   if (topArtists.length === 0) {
     topArtists = [

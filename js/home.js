@@ -160,6 +160,7 @@ async function renderHome() {
           <button class="carousel-btn left" onclick="scrollCarousel('jubin-songs-row', -1)"><i data-lucide="chevron-left"></i></button>
           <div id="jubin-songs-row" class="carousel-row"></div>
           <button class="carousel-btn right" onclick="scrollCarousel('jubin-songs-row', 1)"><i data-lucide="chevron-right"></i></button>
+        </div>
       </div>
 
       <!-- Footer Brand Watermark -->
@@ -173,7 +174,9 @@ async function renderHome() {
 
   // Load and fill content
   try {
-    const data = await window.musicApi.getHome();
+    const data = await window.musicApi.getHome(selectedLanguage);
+    // Cache home data so song-click handlers don't re-fetch it
+    window._cachedHomeData = data;
     
     // 1. Render Hero Section
     renderHero(data.hero);
@@ -188,15 +191,8 @@ async function renderHome() {
     window.homeRecent = recent;
     renderRecentPlays();
 
-    // 3. Render Suggested for You
-    let recommended = [];
-    try {
-      const query = selectedLanguage === 'Hindi' ? 'Hindi hits' : 'Pop hits';
-      recommended = await window.musicStreamingApi.searchSongs(query, 0, 24);
-    } catch {
-      recommended = data.recommended;
-    }
-    if (!recommended || !recommended.length) recommended = data.recommended;
+    // 3. Render Suggested for You (direct, high-quality, instant load)
+    const recommended = selectedLanguage === 'Hindi' ? (data.hindi || []) : (data.english || []);
     window.homeRecommended = recommended;
     renderSuggested(recommended);
 
@@ -205,17 +201,15 @@ async function renderHome() {
     window.homePlaylists = playlists;
     renderPlaylists(playlists);
 
-    // 5. Render Hindi Top Hits (using topHits or custom)
-    const hindiHits = data.topHits.filter(t => t.language === 'Hindi');
-    window.homeHindiHits = hindiHits.length ? hindiHits : data.topHits.slice(0, 12);
+    // 5. Render Hindi Top Hits (using hindi array from api)
+    window.homeHindiHits = data.hindi && data.hindi.length ? data.hindi : data.topHits.slice(0, 12);
     renderHindiHits(window.homeHindiHits);
 
     // 6. Render Bollywood Classics (custom API fetch)
     loadBollywoodClassics();
 
-    // 7. Render English Hits
-    const englishHits = data.topHits.filter(t => t.language === 'English');
-    window.homeEnglishHits = englishHits.length ? englishHits : data.topHits.slice(6, 18);
+    // 7. Render English Hits (using english array from api)
+    window.homeEnglishHits = data.english && data.english.length ? data.english : data.topHits.slice(6, 18);
     renderEnglishHits(window.homeEnglishHits);
 
     // 8. Fetch and Render Real Popular Artists based on selected language
@@ -224,15 +218,30 @@ async function renderHome() {
       ? ['Arijit Singh', 'Shreya Ghoshal', 'Jubin Nautiyal', 'Neha Kakkar', 'Diljit Dosanjh', 'Atif Aslam', 'Armaan Malik', 'Badshah']
       : ['Taylor Swift', 'Ed Sheeran', 'Billie Eilish', 'Justin Bieber', 'Drake', 'Bruno Mars', 'The Weeknd', 'Dua Lipa'];
 
+    // Use topNames as fallback so even if searchArtists fails we have metadata
+    const topNamesMap = {};
+    topNames.forEach(n => { topNamesMap[n.toLowerCase()] = n; });
+
     const artistsPromises = topNames.map(async name => {
       try {
         const results = await window.musicStreamingApi.searchArtists(name, 0, 1);
-        return results[0] || null;
+        const a = results[0];
+        if (a) return { ...a, _searchName: name }; // keep the name we searched for
+        // Fallback: build a stub with the name
+        return { id: name.toLowerCase().replace(/\s+/g, '-'), name, image: '', followers: '1M+', _searchName: name };
       } catch {
-        return null;
+        return { id: name.toLowerCase().replace(/\s+/g, '-'), name, image: '', followers: '1M+', _searchName: name };
       }
     });
     const realArtists = (await Promise.all(artistsPromises)).filter(Boolean);
+
+    // ── Cache artist metadata so artist detail page knows their names ──────────
+    window._artistCache = window._artistCache || {};
+    realArtists.forEach(a => {
+      if (a?.id) window._artistCache[String(a.id)] = a;
+      if (a?.name) window._artistCache[a.name.toLowerCase()] = a;
+    });
+
     window.homeArtists = realArtists;
     renderArtists(realArtists);
 
@@ -242,10 +251,21 @@ async function renderHome() {
     loadShreyaSongs();
     loadJubinSongs();
 
-
+    // ── Populate global song cache so ANY card click is instant ──────────────
+    // Every song rendered on the page gets stored here by id.
+    // playSongFromCard/Tracklist checks this first — no extra API call needed.
+    window._songCache = window._songCache || {};
+    const allHomeArrays = [
+      data.recommended, data.trending, data.topHits, data.newReleases,
+      recommended, window.homeHindiHits, window.homeEnglishHits,
+    ].filter(Boolean);
+    allHomeArrays.forEach(arr => {
+      (arr || []).forEach(s => { if (s?.id) window._songCache[s.id] = s; });
+    });
 
     // Update icons inside dynamic portions
     lucide.createIcons();
+
   } catch (error) {
     console.error("Error loading home page content:", error);
     // Fail-safe render to clear skeleton cards
@@ -296,6 +316,10 @@ function renderRecentPlays() {
     }
   }
 
+  // Populate cache with recent plays so they can be downloaded/played/shared
+  window._songCache = window._songCache || {};
+  recent.forEach(s => { if (s?.id) window._songCache[s.id] = s; });
+
   const row = document.getElementById('recent-row');
   const section = document.getElementById('section-recent');
   if (!row || !section) return;
@@ -322,11 +346,11 @@ function renderSuggested(tracks) {
         <img src="${track.artwork || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300&auto=format&fit=crop'}" alt="${track.title}" />
       </div>
       <div class="suggestion-details">
-        <div class="suggestion-artist">${track.artist.toUpperCase()}</div>
         <div class="suggestion-title">${track.title}</div>
+        <div class="suggestion-artist">${track.artist}</div>
       </div>
-      <button class="suggestion-menu-btn" onclick="event.stopPropagation(); showTrackMenu(event, '${track.id}')">
-        <i data-lucide="more-vertical"></i>
+      <button class="suggestion-menu-btn" onclick="event.stopPropagation(); showTrackMenu(event, '${track.id}')" style="font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">
+        &#8942;
       </button>
     </div>
   `).join('');
@@ -360,146 +384,77 @@ function renderHindiHits(tracks) {
   row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
 }
 
-const hindiHitsFallbacks = [
-  { id: 'fb-kesariya', title: 'Kesariya', artist: 'Pritam, Arijit Singh, Amitabh Bhattacharya', artwork: 'https://c.saavncdn.com/191/Kesariya-From-Brahmastra-Hindi-2022-20220717092820-500x500.jpg', album: 'Brahmastra', duration: '4:28' },
-  { id: 'fb-apnabanale', title: 'Apna Bana Le', artist: 'Arijit Singh, Sachin-Jigar', artwork: 'https://c.saavncdn.com/816/Apna-Bana-Le-From-Bhediya-Hindi-2022-20221105193910-500x500.jpg', album: 'Bhediya', duration: '4:21' },
-  { id: 'fb-chaleya', title: 'Chaleya', artist: 'Anirudh Ravichander, Arijit Singh', artwork: 'https://c.saavncdn.com/022/Chaleya-From-Jawan-Hindi-2023-20230814114321-500x500.jpg', album: 'Jawan', duration: '3:08' },
-  { id: 'fb-devadeva', title: 'Deva Deva', artist: 'Pritam, Arijit Singh, Jonita Gandhi', artwork: 'https://c.saavncdn.com/191/Kesariya-From-Brahmastra-Hindi-2022-20220717092820-500x500.jpg', album: 'Brahmastra', duration: '4:39' },
-  { id: 'fb-heeriye', title: 'Heeriye', artist: 'Jasleen Royal, Arijit Singh', artwork: 'https://c.saavncdn.com/044/Heeriye-feat-Arijit-Singh-Hindi-2023-20230725062627-500x500.jpg', album: 'Heeriye', duration: '3:14' },
-  { id: 'fb-maanmerijaan', title: 'Maan Meri Jaan', artist: 'King', artwork: 'https://c.saavncdn.com/734/Champagne-Talk-Hindi-2022-20221012061214-500x500.jpg', album: 'Champagne Talk', duration: '3:14' }
-];
-
-const classicsFallbacks = [
-  { id: 'fb-tumhiho', title: 'Tum Hi Ho', artist: 'Arijit Singh, Mithoon', artwork: 'https://c.saavncdn.com/902/Aashiqui-2-Hindi-2013-500x500.jpg', album: 'Aashiqui 2', duration: '4:22' },
-  { id: 'fb-tujhedekha', title: 'Tujhe Dekha To Yeh Jaana Sanam', artist: 'Kumar Sanu, Lata Mangeshkar', artwork: 'https://c.saavncdn.com/129/Dilwale-Dulhania-Le-Jayenge-Hindi-1995-20200813134005-500x500.jpg', album: 'DDLJ', duration: '5:02' },
-  { id: 'fb-churakedilmera', title: 'Chura Ke Dil Mera', artist: 'Kumar Sanu, Alka Yagnik', artwork: 'https://c.saavncdn.com/985/Main-Khiladi-Tu-Anari-Hindi-1994-20220917173256-500x500.jpg', album: 'Main Khiladi Tu Anari', duration: '5:49' },
-  { id: 'fb-kalhonaaho', title: 'Kal Ho Naa Ho', artist: 'Sonu Nigam, Shankar-Ehsaan-Loy', artwork: 'https://c.saavncdn.com/264/Kal-Ho-Naa-Ho-Hindi-2003-20221021200115-500x500.jpg', album: 'Kal Ho Naa Ho', duration: '5:21' },
-  { id: 'fb-lagjagale', title: 'Lag Ja Gale Ke Phir', artist: 'Lata Mangeshkar, Madan Mohan', artwork: 'https://c.saavncdn.com/530/Woh-Kaun-Thi-Hindi-1964-20190603134300-500x500.jpg', album: 'Woh Kaun Thi', duration: '4:17' },
-  { id: 'fb-tujhmeinrab', title: 'Tujh Mein Rab Dikhta Hai', artist: 'Roopkumar Rathod, Salim-Sulaiman', artwork: 'https://c.saavncdn.com/231/Rab-Ne-Bana-Di-Jodi-Hindi-2008-20221122174312-500x500.jpg', album: 'Rab Ne Bana Di Jodi', duration: '4:44' }
-];
-
-const trendingFallbacks = [
-  { id: 'fb-pasoori', title: 'Pasoori', artist: 'Ali Sethi, Shae Gill', artwork: 'https://c.saavncdn.com/259/Pasoori-Punjabi-2022-20220203181822-500x500.jpg', album: 'Pasoori', duration: '3:44' },
-  { id: 'fb-makhna', title: 'Makhna', artist: 'Tanishk Bagchi, Yasser Desai', artwork: 'https://c.saavncdn.com/007/Drive-Hindi-2019-20191101075001-500x500.jpg', album: 'Drive', duration: '3:03' },
-  { id: 'fb-kahanisuno', title: 'Kahani Suno 2.0', artist: 'Kaifi Khalil', artwork: 'https://c.saavncdn.com/327/Kahani-Suno-2-0-Urdu-2022-20220614163901-500x500.jpg', album: 'Kahani Suno', duration: '2:53' },
-  { id: 'fb-miamor', title: 'Mi Amor', artist: 'Sharn, 4B', artwork: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=300&auto=format&fit=crop', album: 'Single', duration: '3:12' },
-  { id: 'fb-shapeofyou', title: 'Shape of You', artist: 'Ed Sheeran', artwork: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=300&auto=format&fit=crop', album: 'Divide', duration: '3:53' },
-  { id: 'fb-blindinglights', title: 'Blinding Lights', artist: 'The Weeknd', artwork: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=300&auto=format&fit=crop', album: 'After Hours', duration: '3:20' }
-];
-
-const arijitFallbacks = [
-  { id: 'fb-kesariya', title: 'Kesariya', artist: 'Pritam, Arijit Singh, Amitabh Bhattacharya', artwork: 'https://c.saavncdn.com/191/Kesariya-From-Brahmastra-Hindi-2022-20220717092820-500x500.jpg', album: 'Brahmastra', duration: '4:28' },
-  { id: 'fb-apnabanale', title: 'Apna Bana Le', artist: 'Arijit Singh, Sachin-Jigar', artwork: 'https://c.saavncdn.com/816/Apna-Bana-Le-From-Bhediya-Hindi-2022-20221105193910-500x500.jpg', album: 'Bhediya', duration: '4:21' },
-  { id: 'fb-tumhiho', title: 'Tum Hi Ho', artist: 'Arijit Singh, Mithoon', artwork: 'https://c.saavncdn.com/902/Aashiqui-2-Hindi-2013-500x500.jpg', album: 'Aashiqui 2', duration: '4:22' },
-  { id: 'fb-chaleya', title: 'Chaleya', artist: 'Anirudh Ravichander, Arijit Singh', artwork: 'https://c.saavncdn.com/022/Chaleya-From-Jawan-Hindi-2023-20230814114321-500x500.jpg', album: 'Jawan', duration: '3:08' },
-  { id: 'fb-heeriye', title: 'Heeriye', artist: 'Jasleen Royal, Arijit Singh', artwork: 'https://c.saavncdn.com/044/Heeriye-feat-Arijit-Singh-Hindi-2023-20230725062627-500x500.jpg', album: 'Heeriye', duration: '3:14' },
-  { id: 'fb-shayad', title: 'Shayad', artist: 'Pritam, Arijit Singh', artwork: 'https://c.saavncdn.com/262/Love-Aaj-Kal-Hindi-2020-20200214152504-500x500.jpg', album: 'Love Aaj Kal', duration: '4:07' }
-];
-
-const shreyaFallbacks = [
-  { id: 'fb-deewanimastani', title: 'Deewani Mastani', artist: 'Shreya Ghoshal, Sanjay Leela Bhansali', artwork: 'https://c.saavncdn.com/070/Bajirao-Mastani-Hindi-2015-20221213031021-500x500.jpg', album: 'Bajirao Mastani', duration: '5:40' },
-  { id: 'fb-teriore', title: 'Teri Ore', artist: 'Pritam, Shreya Ghoshal, Rahat Fateh Ali Khan', artwork: 'https://c.saavncdn.com/131/Singh-Is-Kinng-Hindi-2008-20221122143003-500x500.jpg', album: 'Singh Is Kinng', duration: '5:39' },
-  { id: 'fb-ghoomar', title: 'Ghoomar', artist: 'Shreya Ghoshal, Swaroop Khan', artwork: 'https://c.saavncdn.com/712/Padmaavat-Hindi-2018-20180125164923-500x500.jpg', album: 'Padmaavat', duration: '4:42' },
-  { id: 'fb-manwalaage', title: 'Manwa Laage', artist: 'Shreya Ghoshal, Arijit Singh, Vishal-Shekhar', artwork: 'https://c.saavncdn.com/830/Happy-New-Year-Hindi-2014-20221122041235-500x500.jpg', album: 'Happy New Year', duration: '4:31' },
-  { id: 'fb-saans', title: 'Saans', artist: 'Shreya Ghoshal, Mohit Chauhan, A.R. Rahman', artwork: 'https://c.saavncdn.com/791/Jab-Tak-Hai-Jaan-Hindi-2012-20221208031034-500x500.jpg', album: 'Jab Tak Hai Jaan', duration: '5:28' }
-];
-
-const jubinFallbacks = [
-  { id: 'fb-raataanlambiyan', title: 'Raataan Lambiyan', artist: 'Tanishk Bagchi, Jubin Nautiyal, Asees Kaur', artwork: 'https://c.saavncdn.com/238/Shershaah-Hindi-2021-20210815124617-500x500.jpg', album: 'Shershaah', duration: '3:50' },
-  { id: 'fb-tumhiaana', title: 'Tum Hi Aana', artist: 'Payal Dev, Jubin Nautiyal', artwork: 'https://c.saavncdn.com/620/Marjaavaan-Hindi-2019-20200814120300-500x500.jpg', album: 'Marjaavaan', duration: '4:09' },
-  { id: 'fb-lutgaye', title: 'Lut Gaye', artist: 'Tanishk Bagchi, Jubin Nautiyal', artwork: 'https://c.saavncdn.com/279/Lut-Gaye-Hindi-2021-20210217150148-500x500.jpg', album: 'Lut Gaye', duration: '3:48' },
-  { id: 'fb-humnavamere', title: 'Humnava Mere', artist: 'Rocky-Shiv, Jubin Nautiyal', artwork: 'https://c.saavncdn.com/023/Humnava-Mere-Hindi-2018-20180523-500x500.jpg', album: 'Humnava Mere', duration: '4:43' },
-  { id: 'fb-kinnasona', title: 'Kinna Sona', artist: 'Meet Bros, Jubin Nautiyal', artwork: 'https://c.saavncdn.com/620/Marjaavaan-Hindi-2019-20200814120300-500x500.jpg', album: 'Marjaavaan', duration: '4:33' }
-];
-
 async function loadBollywoodClassics() {
   const row = document.getElementById('classics-row');
   if (!row) return;
-
   try {
     const tracks = await window.musicStreamingApi.searchSongs("Bollywood Classics", 0, 12);
-    const finalTracks = tracks.length ? tracks : classicsFallbacks;
-    window.homeClassics = finalTracks;
-    row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
-  } catch (err) {
-    console.error("Error loading classics:", err);
-    row.innerHTML = classicsFallbacks.map(track => createSongCardHTML(track, classicsFallbacks)).join('');
-  }
-  lucide.createIcons();
+    if (tracks.length) {
+      window.homeClassics = tracks;
+      tracks.forEach(s => { if (s?.id) window._songCache[s.id] = s; });
+      row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
+      lucide.createIcons();
+    }
+  } catch (err) { console.error("Error loading classics:", err); }
 }
 
 async function loadTrendingSongs() {
   const row = document.getElementById('trending-songs-row');
   if (!row) return;
-
   try {
-    const tracks = await window.musicStreamingApi.searchSongs("trending", 0, 12);
-    const finalTracks = tracks.length ? tracks : trendingFallbacks;
-    row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
-  } catch (err) {
-    console.error("Error loading trending songs:", err);
-    row.innerHTML = trendingFallbacks.map(track => createSongCardHTML(track, trendingFallbacks)).join('');
-  }
-  lucide.createIcons();
+    const query = selectedLanguage === 'Hindi' ? 'trending hindi' : 'Billboard Hot 100';
+    const tracks = await window.musicStreamingApi.searchSongs(query, 0, 12);
+    if (tracks.length) {
+      tracks.forEach(s => { if (s?.id) window._songCache[s.id] = s; });
+      row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
+      lucide.createIcons();
+    }
+  } catch (err) { console.error("Error loading trending songs:", err); }
 }
 
 async function loadArijitSongs() {
   const row = document.getElementById('arijit-songs-row');
   if (!row) return;
-
   try {
     const tracks = await window.musicStreamingApi.searchSongs("Arijit Singh", 0, 12);
-    const finalTracks = tracks.length ? tracks : arijitFallbacks;
-    row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
-  } catch (err) {
-    console.error("Error loading Arijit songs:", err);
-    row.innerHTML = arijitFallbacks.map(track => createSongCardHTML(track, arijitFallbacks)).join('');
-  }
-  lucide.createIcons();
+    if (tracks.length) {
+      tracks.forEach(s => { if (s?.id) window._songCache[s.id] = s; });
+      row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
+      lucide.createIcons();
+    }
+  } catch (err) { console.error("Error loading Arijit songs:", err); }
 }
 
 async function loadShreyaSongs() {
   const row = document.getElementById('shreya-songs-row');
   if (!row) return;
-
   try {
     const tracks = await window.musicStreamingApi.searchSongs("Shreya Ghoshal", 0, 12);
-    const finalTracks = tracks.length ? tracks : shreyaFallbacks;
-    row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
-  } catch (err) {
-    console.error("Error loading Shreya songs:", err);
-    row.innerHTML = shreyaFallbacks.map(track => createSongCardHTML(track, shreyaFallbacks)).join('');
-  }
-  lucide.createIcons();
+    if (tracks.length) {
+      tracks.forEach(s => { if (s?.id) window._songCache[s.id] = s; });
+      row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
+      lucide.createIcons();
+    }
+  } catch (err) { console.error("Error loading Shreya songs:", err); }
 }
 
 async function loadJubinSongs() {
   const row = document.getElementById('jubin-songs-row');
   if (!row) return;
-
   try {
     const tracks = await window.musicStreamingApi.searchSongs("Jubin Nautiyal", 0, 12);
-    const finalTracks = tracks.length ? tracks : jubinFallbacks;
-    row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
-  } catch (err) {
-    console.error("Error loading Jubin songs:", err);
-    row.innerHTML = jubinFallbacks.map(track => createSongCardHTML(track, jubinFallbacks)).join('');
-  }
-  lucide.createIcons();
-}
-
-function renderHindiHits(tracks) {
-  const row = document.getElementById('hindi-hits-row');
-  if (!row) return;
-  const finalTracks = tracks && tracks.length ? tracks : hindiHitsFallbacks;
-  row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
+    if (tracks.length) {
+      tracks.forEach(s => { if (s?.id) window._songCache[s.id] = s; });
+      row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
+      lucide.createIcons();
+    }
+  } catch (err) { console.error("Error loading Jubin songs:", err); }
 }
 
 function renderEnglishHits(tracks) {
   const row = document.getElementById('english-row');
   if (!row) return;
-  const finalTracks = tracks && tracks.length ? tracks : trendingFallbacks;
-  row.innerHTML = finalTracks.map(track => createSongCardHTML(track, finalTracks)).join('');
+  row.innerHTML = tracks.map(track => createSongCardHTML(track, tracks)).join('');
 }
 
 function renderArtists(artists) {
@@ -557,34 +512,73 @@ window.scrollCarousel = (rowId, direction) => {
   row.scrollBy({ left: scrollAmount, behavior: 'smooth' });
 };
 
+// ─── Global song cache: populated at load, used for instant playback ──────────
+window._songCache = window._songCache || {};
+
+function findCachedSong(trackId) {
+  // Check the flat song cache first
+  if (window._songCache[trackId]) return window._songCache[trackId];
+  // Fall back to searching all home data arrays
+  const home = window._cachedHomeData || {};
+  const allArrays = [
+    home.recommended, home.trending, home.topHits,
+    home.newReleases, home.artists,
+    ...(home.playlists || []).map(p => p.songs || []),
+  ].filter(Boolean);
+  for (const arr of allArrays) {
+    const found = arr.find && arr.find(s => s && (s.id === trackId || s.sourceId === trackId));
+    if (found) return found;
+  }
+  return null;
+}
+
 window.playSongFromCard = async (trackId) => {
   try {
-    const track = await window.musicStreamingApi.getSongById(trackId);
-    if (track) {
-      // Get home suggestions / parent tracks to play as queue
-      const homeData = await window.musicApi.getHome();
-      const allSongs = [...homeData.recommended, ...homeData.topHits];
-      window.player.playTrack(track, allSongs);
+    // Use cached song data — it already has the decrypted audioUrl
+    let track = findCachedSong(trackId);
+
+    // Only hit the API if we truly can't find it in cache
+    if (!track || !track.audioUrl) {
+      track = await window.musicStreamingApi.getSongById(trackId);
     }
+
+    if (!track) { console.warn('playSongFromCard: track not found', trackId); return; }
+
+    // Build queue from all cached songs
+    const home = window._cachedHomeData || {};
+    const queue = [
+      ...(home.recommended || []),
+      ...(home.trending    || []),
+      ...(home.topHits     || []),
+    ].filter(Boolean);
+
+    window.player.playTrack(track, queue.length ? queue : [track]);
   } catch (error) {
-    console.error("Error playing song from card:", error);
+    console.error('playSongFromCard error:', error);
   }
 };
 
 window.playSongFromTracklist = async (trackId, sectionType) => {
   try {
-    const track = await window.musicStreamingApi.getSongById(trackId);
-    if (track) {
-      let queue = [track];
-      // Build a queue based on what section was playing
-      const homeData = await window.musicApi.getHome();
-      if (sectionType === 'suggested') {
-        queue = homeData.recommended;
-      }
-      window.player.playTrack(track, queue);
+    let track = findCachedSong(trackId);
+    if (!track || !track.audioUrl) {
+      track = await window.musicStreamingApi.getSongById(trackId);
     }
+    if (!track) return;
+
+    const home = window._cachedHomeData || {};
+    let queue = [track];
+    if (sectionType === 'suggested' && home.recommended?.length) {
+      queue = home.recommended;
+    } else if (sectionType === 'trending' && home.trending?.length) {
+      queue = home.trending;
+    } else if (home.topHits?.length) {
+      queue = home.topHits;
+    }
+
+    window.player.playTrack(track, queue);
   } catch (err) {
-    console.error(err);
+    console.error('playSongFromTracklist error:', err);
   }
 };
 

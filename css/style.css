@@ -16,6 +16,7 @@
   --text-muted: #4e5564;
   
   --accent: #ffffff;
+  --accent-hover: #e0e0e0;
   --border-color: rgba(255, 255, 255, 0.06);
   --sidebar-width-collapsed: 72px;
   --sidebar-width-expanded: 180px;
@@ -717,11 +718,11 @@ body {
 }
 
 .suggestion-artist {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text-secondary);
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  text-transform: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -729,7 +730,7 @@ body {
 
 .suggestion-title {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -1674,6 +1675,36 @@ body {
   margin-top: 40px;
 }
 
+/* Slide-out Interactive Lyrics Line Styling */
+.lyrics-body .fs-lyric-line {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+  cursor: pointer;
+  transition: all 0.2s ease !important;
+  margin-bottom: 14px !important;
+  line-height: 1.4 !important;
+}
+
+.lyrics-body .fs-lyric-line:hover {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.lyrics-body .fs-lyric-line.active {
+  color: #38ef7d !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  text-shadow: 0 0 10px rgba(56, 239, 125, 0.3);
+}
+
+.lyrics-body .fs-lyric-line.placeholder {
+  font-size: 14px !important;
+  color: var(--text-secondary) !important;
+  text-align: center;
+  cursor: default !important;
+}
+
+
 /* Floating Custom Context Menu */
 .context-menu {
   position: absolute;
@@ -2279,6 +2310,7 @@ button:focus, button:active, button:focus-visible {
   width: 100%;
   height: 95%;
   overflow-y: auto;
+  padding-left: 24px;
   padding-right: 20px;
   scroll-behavior: smooth;
   display: flex;
@@ -2525,6 +2557,8 @@ button:focus, button:active, button:focus-visible {
   grid-template-columns: repeat(5, 1fr);
   gap: 32px;
   padding-bottom: 80px;
+  justify-content: center;
+  justify-items: center;
 }
 
 /* Home Screen Watermark Footer */
@@ -2541,6 +2575,7 @@ button:focus, button:active, button:focus-visible {
   text-align: left;
   text-transform: capitalize;
   opacity: 0.8;
+  margin-left: -20px;
   font-family: 'Outfit', sans-serif;
 }
 
@@ -2639,6 +2674,114 @@ button:focus, button:active, button:focus-visible {
   opacity: 1;
   transform: translateY(0);
 }
+
+/* Socials Coming Soon Glowing Badge & Blocked Style */
+.sidebar-link.blocked-link {
+  cursor: not-allowed !important;
+  opacity: 0.8;
+  position: relative;
+}
+
+.sidebar-link.blocked-link .block-icon {
+  display: none !important;
+}
+
+.sidebar-link.blocked-link .normal-icon {
+  display: inline-block !important;
+}
+
+.sidebar-link.blocked-link:hover {
+  background: rgba(255, 255, 255, 0.02) !important;
+  color: var(--text-secondary) !important;
+}
+
+.sidebar-link.blocked-link:hover .normal-icon {
+  display: none !important;
+}
+
+.sidebar-link.blocked-link:hover .block-icon {
+  display: inline-block !important;
+}
+
+.coming-soon-badge {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(255, 51, 102, 0.15);
+  color: #ff3366;
+  border: 1px solid rgba(255, 51, 102, 0.4);
+  margin-left: auto;
+  box-shadow: 0 0 10px rgba(255, 51, 102, 0.3);
+  animation: badge-glow 2s infinite ease-in-out;
+  pointer-events: none;
+  
+  /* Initial hidden state, transitions to active on hover */
+  opacity: 0;
+  transform: translateX(10px);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.sidebar-link.blocked-link:hover .coming-soon-badge {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@keyframes badge-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(255, 51, 102, 0.2), inset 0 0 2px rgba(255, 51, 102, 0.1);
+    border-color: rgba(255, 51, 102, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(255, 51, 102, 0.7), inset 0 0 5px rgba(255, 51, 102, 0.3);
+    border-color: rgba(255, 51, 102, 0.8);
+  }
+}
+
+/* Blocked Party Room Card hover styling */
+.library-box.blocked-party-room {
+  cursor: not-allowed !important;
+}
+
+.library-box.blocked-party-room .party-blocked-btn {
+  display: none !important;
+}
+
+.library-box.blocked-party-room .party-normal-btn {
+  display: flex !important;
+}
+
+.library-box.blocked-party-room .coming-soon-badge {
+  opacity: 0;
+  transform: translateX(10px);
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 8px;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Hover transitions */
+.library-box.blocked-party-room:hover .party-normal-btn {
+  display: none !important;
+}
+
+.library-box.blocked-party-room:hover .party-blocked-btn {
+  display: flex !important;
+  background-color: rgba(255, 51, 102, 0.15) !important;
+  border: 1px solid rgba(255, 51, 102, 0.5) !important;
+  color: #ff3366 !important;
+  box-shadow: 0 0 15px rgba(255, 51, 102, 0.5);
+  animation: badge-glow 2s infinite ease-in-out;
+}
+
+.library-box.blocked-party-room:hover .coming-soon-badge {
+  opacity: 1;
+  transform: translateX(0);
+}
+
 
 
 

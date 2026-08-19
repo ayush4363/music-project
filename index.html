@@ -2,28 +2,23 @@
 <html lang="en" spellcheck="false">
 <head>
   <meta charset="UTF-8">
-  <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AYU.music - Premium Music Streaming</title>
    <link rel="icon" type="image/x-icon" href="music.png">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=19">
+  <link rel="stylesheet" href="css/style.css?v=27">
   <link rel="stylesheet" href="css/animations.css?v=5">
-  <link rel="stylesheet" href="css/responsive.css?v=32">
+  <link rel="stylesheet" href="css/responsive.css?v=35">
   
-  <!-- CDNs -->
+  <!-- CDNs — loaded here so they're available before body scripts run -->
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- SortableJS -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-
-  <!-- Application Logic Scripts -->
-  <script src="js/data.js?v=17"></script>
-  <script src="js/api.js?v=18"></script>
-  <script src="js/player.js?v=18"></script>
-  <script src="js/app.js?v=47"></script>
   <!-- HLS Streaming supporting m3u8 streams -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <!-- CryptoJS — needed to decrypt JioSaavn's DES-encrypted audio stream URLs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
 </head>
 <body spellcheck="false" autocorrect="off">
 
@@ -43,9 +38,11 @@
           <i data-lucide="library"></i>
           <span class="sidebar-text">Library</span>
         </a>
-        <a href="#/socials" class="sidebar-link" data-page="socials">
-          <i data-lucide="users"></i>
+        <a href="javascript:void(0)" class="sidebar-link blocked-link" onclick="triggerSocialsComingSoon(event)">
+          <i data-lucide="users" class="normal-icon"></i>
+          <i data-lucide="ban" class="block-icon" style="color: #ff3366;"></i>
           <span class="sidebar-text">Socials</span>
+          <span class="coming-soon-badge">Soon</span>
         </a>
         <a href="#/profile" class="sidebar-link" data-page="profile">
           <i data-lucide="user"></i>
@@ -280,18 +277,18 @@
 
 
   <!-- Core Javascript Components Linked Sequentially (Namespace Global Architecture) -->
-  <script src="js/data.js?v=15"></script>
-  <script src="js/api.js?v=23"></script>
+  <script src="js/data.js?v=25"></script>
+  <script src="js/api.js?v=77"></script>
 
-  <script src="js/player.js?v=16"></script>
-  <script src="js/navigation.js?v=16"></script>
-  <script src="js/home.js?v=18"></script>
-  <script src="js/search.js?v=15"></script>
-  <script src="js/library.js?v=19"></script>
-  <script src="js/socials.js?v=15"></script>
-  <script src="js/profile.js?v=17"></script>
-  <script src="js/app.js?v=57"></script>
-  <script src="js/interactions.js?v=15"></script>
+  <script src="js/player.js?v=25"></script>
+  <script src="js/navigation.js?v=30"></script>
+  <script src="js/home.js?v=65"></script>
+  <script src="js/search.js?v=30"></script>
+  <script src="js/library.js?v=45"></script>
+  <script src="js/socials.js?v=25"></script>
+  <script src="js/profile.js?v=40"></script>
+  <script src="js/app.js?v=90"></script>
+  <script src="js/interactions.js?v=25"></script>
 
 </body>
 </html>

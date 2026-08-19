@@ -113,7 +113,7 @@ window.downloadTrack = async (track) => {
   `;
 
   try {
-    let streamUrl = track.streamUrl;
+    let streamUrl = track.audioUrl || track.streamUrl;
     if (!streamUrl && window.musicStreamingApi) {
       streamUrl = await window.musicStreamingApi.getStream(track.id);
     }
@@ -363,13 +363,16 @@ async function renderLibrary() {
           </div>
 
           <!-- Party Room Card -->
-          <div class="library-box" onclick="navigateTo('#/socials')">
+          <div class="library-box blocked-party-room" onclick="triggerPartyRoomComingSoon(event)">
             <div class="library-box-left">
-              <span class="library-box-title">Party Room</span>
+              <span class="library-box-title">Party Room <span class="coming-soon-badge">Soon</span></span>
               <span class="library-box-desc">Host a synced listening session with friends</span>
             </div>
-            <button class="library-box-btn">
+            <button class="library-box-btn party-normal-btn">
               <i data-lucide="arrow-up-right"></i>
+            </button>
+            <button class="library-box-btn party-blocked-btn">
+              <i data-lucide="ban"></i>
             </button>
           </div>
         </div>
@@ -626,7 +629,22 @@ async function renderArtistDetail(artistId) {
 
   try {
     const artist = await window.musicStreamingApi.getArtist(artistId);
+
+    // Store songs for playback — both the queue list and id-lookup cache
+    window._currentArtistSongs = artist.songs || [];
+    window._songCache = window._songCache || {};
+    window._currentArtistSongs.forEach(s => { if (s?.id) window._songCache[s.id] = s; });
+
     const hasSongs = artist.songs && artist.songs.length > 0;
+
+    // Follow/Like artist check
+    let followed = [];
+    try {
+      followed = JSON.parse(localStorage.getItem('liked_artists')) || [];
+    } catch {
+      followed = [];
+    }
+    const isLiked = followed.some(a => String(a.id) === String(artistId));
 
     container.innerHTML = `
       <div class="page animate-fade-up">
@@ -638,12 +656,16 @@ async function renderArtistDetail(artistId) {
             <span class="detail-type">Artist</span>
             <h1 class="detail-title">${artist.name}</h1>
             <p class="detail-metadata">${artist.followers} followers</p>
-            <div class="detail-actions">
+            <div class="detail-actions" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:16px;">
               ${hasSongs ? `
-                <button class="hero-cta" onclick="playArtistQueue('${artistId}')" style="margin-top:0;">
+                <button class="hero-cta" onclick="playArtistQueue('${artistId}')" style="margin-top:0; margin-bottom:0;">
                   <i data-lucide="play" fill="currentColor"></i> Play Top Songs
                 </button>
               ` : ''}
+              <button class="artist-like-btn ${isLiked ? 'liked' : ''}" onclick="toggleLikeArtist('${artistId}', '${artist.name.replace(/'/g, "\\'")}', '${artist.image || ''}')" style="display: inline-flex; align-items: center; gap: 8px; background: ${isLiked ? 'rgba(255, 51, 102, 0.15)' : 'rgba(255, 255, 255, 0.08)'}; border: 1px solid ${isLiked ? 'rgba(255, 51, 102, 0.4)' : 'rgba(255, 255, 255, 0.15)'}; color: ${isLiked ? '#ff3366' : '#fff'}; border-radius: 22px; padding: 12px 24px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s ease;">
+                <i data-lucide="heart" fill="${isLiked ? '#ff3366' : 'none'}" style="width: 18px; height: 18px; ${isLiked ? 'color: #ff3366;' : ''}"></i>
+                <span>${isLiked ? 'Following' : 'Follow'}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -872,3 +894,85 @@ window.renderPlaylistDetail = renderPlaylistDetail;
 window.renderAlbumDetail = renderAlbumDetail;
 window.renderArtistDetail = renderArtistDetail;
 window.getLocalPlaylists = getLocalPlaylists;
+
+// ─── Artist Page Playback (called from artist detail HTML) ────────────────────
+
+// Store current artist song list for queue
+window._currentArtistSongs = [];
+
+window.playSongFromArtistTable = async (songId, artistId) => {
+  try {
+    // Check song cache first (fastest path)
+    let track = window._songCache?.[songId];
+
+    // If not in cache, fetch fresh
+    if (!track || !track.audioUrl) {
+      track = await window.musicStreamingApi.getSongById(songId);
+    }
+    if (!track) { console.warn('playSongFromArtistTable: track not found', songId); return; }
+
+    // Use the artist's song list as queue if available
+    const queue = window._currentArtistSongs?.length ? window._currentArtistSongs : [track];
+    window.player.playTrack(track, queue);
+  } catch (err) {
+    console.error('playSongFromArtistTable error:', err);
+  }
+};
+
+window.playArtistQueue = async (artistId) => {
+  try {
+    // Use already-loaded artist songs from cache
+    const queue = window._currentArtistSongs;
+    if (queue && queue.length > 0) {
+      window.player.playTrack(queue[0], queue);
+    } else {
+      // Fetch fresh if needed
+      const artist = await window.musicStreamingApi.getArtist(artistId);
+      if (artist?.songs?.length) {
+        window._currentArtistSongs = artist.songs;
+        artist.songs.forEach(s => { if (s?.id) (window._songCache = window._songCache || {})[s.id] = s; });
+        window.player.playTrack(artist.songs[0], artist.songs);
+      }
+    }
+  } catch (err) {
+    console.error('playArtistQueue error:', err);
+  }
+};
+
+window.toggleLikeArtist = (artistId, artistName, artistImage) => {
+  let liked = [];
+  try {
+    liked = JSON.parse(localStorage.getItem('liked_artists')) || [];
+  } catch {
+    liked = [];
+  }
+  
+  const index = liked.findIndex(a => String(a.id) === String(artistId));
+  if (index > -1) {
+    liked.splice(index, 1);
+    if (window.showGlowingToast) {
+      window.showGlowingToast(`Stopped following ${artistName}`);
+    } else {
+      alert(`Stopped following ${artistName}`);
+    }
+  } else {
+    const realImg = window.getArtistRealImage ? window.getArtistRealImage(artistName, artistImage) : artistImage;
+    liked.push({ id: artistId, name: artistName, image: realImg });
+    if (window.showGlowingToast) {
+      window.showGlowingToast(`Following ${artistName} 💖`);
+    } else {
+      alert(`Following ${artistName} 💖`);
+    }
+  }
+  
+  localStorage.setItem('liked_artists', JSON.stringify(liked));
+  
+  // Re-render the artist page to update Follow/Following button
+  if (window.location.hash.startsWith('#/artist/')) {
+    const curId = decodeURIComponent(window.location.hash.split('/').pop());
+    if (curId === artistId || curId === artistName) {
+      renderArtistDetail(artistId);
+    }
+  }
+};
+

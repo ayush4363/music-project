@@ -64,7 +64,11 @@ function router() {
     if (parts.length > 2) {
       const baseRoute = '/' + parts[1]; // e.g. /playlist
       handler = routes[baseRoute];
-      param = parts.slice(2).join('/');
+      try {
+        param = decodeURIComponent(parts.slice(2).join('/'));
+      } catch {
+        param = parts.slice(2).join('/');
+      }
     }
   }
 
