@@ -4,7 +4,14 @@
  */
 
 // ─── CORS Proxy ───────────────────────────────────────────────────────────────
-const CORS_PROXY    = 'https://corsproxy.io/?';
+const isLocalhost = window.location.hostname === 'localhost' || 
+                    window.location.hostname === '127.0.0.1' || 
+                    window.location.hostname === '';
+
+const CORS_PROXY = isLocalhost 
+  ? 'https://corsproxy.io/?' 
+  : 'https://api.allorigins.win/raw?url=';
+
 const JIOSAAVN_BASE = 'https://www.jiosaavn.com/api.php';
 const LRCLIB_BASE   = 'https://lrclib.net/api';
 
@@ -51,7 +58,9 @@ async function saavnFetch(callName, extraParams = {}) {
 
   // Build real target URL then prepend proxy (plain string — never new URL with proxy)
   const targetUrl = `${JIOSAAVN_BASE}?${params.toString()}`;
-  const finalUrl  = `${CORS_PROXY}${targetUrl}`;
+  const finalUrl  = CORS_PROXY.includes('allorigins')
+    ? `${CORS_PROXY}${encodeURIComponent(targetUrl)}`
+    : `${CORS_PROXY}${targetUrl}`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12000);
